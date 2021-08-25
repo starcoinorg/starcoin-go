@@ -1,5 +1,13 @@
 package client
 
+import (
+	"fmt"
+	"strings"
+)
+
+const recvPrefix = "0100000000000000"
+const sendPrefix = "0000000000000000"
+
 type BlockHeader struct {
 	Timestamp            string `json:"timestamp"`
 	Author               string `json:"author"`
@@ -109,4 +117,23 @@ type PendingTransaction struct {
 	RawTransaction  RawTransaction `json:"raw_txn"`
 	Timestamp       int64          `json:"timestamp"`
 	TransactionHash string         `json:"transaction_hash"`
+}
+
+type Kind struct {
+	Type     int    `json:"type"`
+	TypeName string `json:"type_name"`
+}
+
+type EventFilter struct {
+	FromBlock uint64   `json:"from_block"`
+	EventKeys []string `json:"event_keys"`
+}
+
+func NewSendRecvEventFilters(addr string, fromBlock uint64) EventFilter {
+	addr = strings.ReplaceAll(addr, "0x", "")
+	eventKeys := []string{fmt.Sprintf("%s%s", recvPrefix, addr), fmt.Sprintf("%s%s", sendPrefix, addr)}
+	return EventFilter{
+		fromBlock,
+		eventKeys,
+	}
 }

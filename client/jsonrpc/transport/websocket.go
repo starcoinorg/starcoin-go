@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/client/jsonrpc/codec"
 )
 
@@ -89,25 +92,29 @@ func (s *stream) listen() {
 		if err != nil {
 			if !s.isClosed() {
 				// log error
+				//return errors.Wrap(err, "parse result failed")
 			}
 			return
 		}
 
-		var resp codec.Response
-		if err = json.Unmarshal(buf, &resp); err != nil {
-			return
-		}
+		id, err := jsonparser.GetInt(buf, "id")
 
-		if resp.ID != 0 {
+		if id != 0 {
+			var resp codec.WsResponse
+			if err = json.Unmarshal(buf, &resp); err != nil {
+				return
+			}
+
 			go s.handleMsg(resp)
 		} else {
 			// handle subscription
 			var respSub codec.Request
 			if err = json.Unmarshal(buf, &respSub); err != nil {
+				errors.Wrap(err, "parse result failed")
 				return
 			}
 
-			if respSub.Method == "eth_subscription" {
+			if respSub.Method == "starcoin_subscription" {
 				go s.handleSubscription(respSub)
 			}
 		}
@@ -121,7 +128,7 @@ func (s *stream) handleSubscription(response codec.Request) {
 	}
 
 	s.subsLock.Lock()
-	callback, ok := s.subs[sub.ID]
+	callback, ok := s.subs[strconv.Itoa(sub.ID)]
 	s.subsLock.Unlock()
 
 	if !ok {
@@ -132,7 +139,7 @@ func (s *stream) handleSubscription(response codec.Request) {
 	callback(sub.Result)
 }
 
-func (s *stream) handleMsg(response codec.Response) {
+func (s *stream) handleMsg(response codec.WsResponse) {
 	s.handlerLock.Lock()
 	callback, ok := s.handler[response.ID]
 	if !ok {
@@ -147,7 +154,11 @@ func (s *stream) handleMsg(response codec.Response) {
 	if response.Error != nil {
 		callback(nil, response.Error)
 	} else {
-		callback(response.Result, nil)
+		sub := codec.Subscription{
+			ID: response.Result,
+		}
+		data, err := json.Marshal(sub)
+		callback(data, err)
 	}
 }
 
@@ -179,8 +190,9 @@ func (s *stream) setHandler(id uint64, ack chan *ackMessage) {
 func (s *stream) Call(method string, out interface{}, params interface{}) error {
 	seq := s.incSeq()
 	request := codec.Request{
-		ID:     seq,
-		Method: method,
+		ID:      seq,
+		Method:  method,
+		Version: "2.0",
 	}
 	if params != nil {
 		data, err := json.Marshal(params)
@@ -221,7 +233,7 @@ func (s *stream) unsubscribe(id string) error {
 	delete(s.subs, id)
 
 	var result bool
-	if err := s.Call("eth_unsubscribe", &result, id); err != nil {
+	if err := s.Call("starcoin_unsubscribe", &result, id); err != nil {
 		return err
 	}
 	if !result {
@@ -238,15 +250,16 @@ func (s *stream) setSubscription(id string, callback func(b []byte)) {
 }
 
 // Subscribe implements the PubSubTransport interface
-func (s *stream) Subscribe(method string, callback func(b []byte)) (func() error, error) {
-	var out string
-	if err := s.Call("eth_subscribe", &out, method); err != nil {
+func (s *stream) Subscribe(callback func(b []byte), parms interface{}) (func() error, error) {
+	var out codec.Subscription
+	if err := s.Call("starcoin_subscribe", &out, parms); err != nil {
 		return nil, err
 	}
 
-	s.setSubscription(out, callback)
+	id := strconv.Itoa(out.ID)
+	s.setSubscription(id, callback)
 	cancel := func() error {
-		return s.unsubscribe(out)
+		return s.unsubscribe(id)
 	}
 	return cancel, nil
 }

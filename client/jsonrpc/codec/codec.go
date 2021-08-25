@@ -20,6 +20,13 @@ type Response struct {
 	Error  *ErrorObject    `json:"error,omitempty"`
 }
 
+// Response is a jsonrpc response
+type WsResponse struct {
+	ID     uint64       `json:"id"`
+	Result int          `json:"result"`
+	Error  *ErrorObject `json:"error,omitempty"`
+}
+
 // ErrorObject is a jsonrpc error
 type ErrorObject struct {
 	Code    int         `json:"code"`
@@ -29,7 +36,7 @@ type ErrorObject struct {
 
 // Subscription is a jsonrpc subscription
 type Subscription struct {
-	ID     string          `json:"subscription"`
+	ID     int             `json:"subscription"`
 	Result json.RawMessage `json:"result"`
 }
 

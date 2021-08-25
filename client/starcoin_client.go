@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -151,4 +152,90 @@ func (this *StarcoinClient) GetState(address string) (*ListResource, error) {
 	}
 
 	return result, nil
+}
+
+func (this *StarcoinClient) Subscribe(args ...interface{}) (chan []byte, error) {
+	client, err := jsonrpc.NewClient(this.url)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, errors.Wrap(err, "subscrible failed ")
+	}
+
+	if !client.SubscriptionEnabled() {
+		return nil, errors.New("this protocal can't enable subscrible function")
+	}
+
+	c := make(chan []byte)
+
+	cancel, err := client.Subscribe(func(b []byte) {
+		c <- b
+	}, args)
+
+	if err != nil {
+		log.Fatalln("call method subscribe err: ", err)
+		cancel()
+		return nil, errors.Wrap(err, "call method subscribe err: ")
+	}
+
+	return c, nil
+}
+
+func (this *StarcoinClient) NewTxnSendRecvEventNotifications(addr string) (chan Event, error) {
+	events := Kind{
+		Type:     1,
+		TypeName: "events",
+	}
+
+	filter := NewSendRecvEventFilters(addr, 0)
+	dataChan, err := this.Subscribe(events, filter)
+
+	if err != nil {
+		log.Fatalln("call method subscribe err: ", err)
+		return nil, errors.Wrap(err, "call method subscribe err: ")
+	}
+
+	eventChan := make(chan Event)
+
+	go func() {
+		defer close(dataChan)
+
+		for data := range dataChan {
+			eventData := Event{}
+			err = json.Unmarshal(data, &eventData)
+			if err != nil {
+				log.Fatalln("call method subscribe err: ", err)
+			}
+			eventChan <- eventData
+		}
+	}()
+	return eventChan, nil
+}
+
+func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string, error) {
+	pendingTxn := Kind{
+		Type:     2,
+		TypeName: "newPendingTransactions",
+	}
+
+	dataChan, err := this.Subscribe(pendingTxn)
+
+	if err != nil {
+		log.Fatalln("call method subscribe err: ", err)
+		return nil, errors.Wrap(err, "call method subscribe err: ")
+	}
+
+	txnChan := make(chan []string)
+
+	go func() {
+		defer close(dataChan)
+		for data := range dataChan {
+			pendingTxn := make([]string, 0, 20)
+			err = json.Unmarshal(data, &pendingTxn)
+			if err != nil {
+				log.Fatalln("call method subscribe err: ", err)
+			}
+			txnChan <- pendingTxn
+		}
+	}()
+	return txnChan, nil
 }

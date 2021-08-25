@@ -12,7 +12,7 @@ func IntMin(a, b int) int {
 	return b
 }
 
-func TestNodeInfo(t *testing.T) {
+func TestHttpCall(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 
 	result, err := client.GetNodeInfo()
@@ -70,5 +70,31 @@ func TestNodeInfo(t *testing.T) {
 	}
 
 	fmt.Println(result)
+
+}
+
+func TestWsCall(t *testing.T) {
+	client := NewStarcoinClient("ws://localhost:9870")
+
+	//c, err := client.NewTxnSendRecvEventNotifications("0xb75994d55eae88219dc57e7e62a11bc0")
+	c, err := client.NewPendingTransactionsNotifications()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	data := <-c
+
+	fmt.Println(data)
+
+	c1, err := client.NewTxnSendRecvEventNotifications("0xb75994d55eae88219dc57e7e62a11bc0")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	data1 := <-c1
+
+	fmt.Println(data1)
 
 }
