@@ -1,13 +1,21 @@
 package client
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
+	"github.com/starcoinorg/starcoin-go/types"
 	"log"
+	"strconv"
 
 	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/client/jsonrpc"
 )
+
+const DEFAULT_MAX_GAS_AMOUNT = 10000000
+const GAS_TOKEN_CODE = "0x1::STC::STC"
+const DEFAULT_TRANSACTION_EXPIRATION_SECONDS = 2 * 60 * 60
 
 type StarcoinClient struct {
 	url string
@@ -36,9 +44,9 @@ func (this *StarcoinClient) Call(serviceMethod string, reply interface{}, args i
 	return nil
 }
 
-func (this *StarcoinClient) GetNodeInfo() (interface{}, error) {
-	result := make(map[string]interface{})
-	err := this.Call("node.info", &result, nil)
+func (this *StarcoinClient) GetNodeInfo() (*NodeInfo, error) {
+	result := &NodeInfo{}
+	err := this.Call("node.info", result, nil)
 
 	if err != nil {
 		log.Fatalln("call node.info err: ", err)
@@ -139,7 +147,7 @@ func (this *StarcoinClient) GetBlocksFromNumber(number, count int) ([]Block, err
 	return result, nil
 }
 
-func (this *StarcoinClient) GetState(address string) (*ListResource, error) {
+func (this *StarcoinClient) GetResource(address string) (*ListResource, error) {
 	result := &ListResource{
 		Resources: make(map[string]Resource),
 	}
@@ -152,6 +160,25 @@ func (this *StarcoinClient) GetState(address string) (*ListResource, error) {
 	}
 
 	return result, nil
+}
+
+func (this *StarcoinClient) GetState(address string) (*types.AccountResource, error) {
+	result := make([]byte, 0, 200)
+	params := []string{address + "/1/0x00000000000000000000000000000001::Account::Account"}
+	err := this.Call("state.get", &result, params)
+
+	if err != nil {
+		log.Fatalln("call state.get err: ", err)
+		return nil, errors.Wrap(err, "call method state.get ")
+	}
+
+	accountResource, err := types.BcsDeserializeAccountResource(result)
+	if err != nil {
+		log.Fatalln("Bcs Deserialize AccountResource failed", err)
+		return nil, errors.Wrap(err, "Bcs Deserialize AccountResource failed")
+	}
+
+	return &accountResource, nil
 }
 
 func (this *StarcoinClient) Subscribe(args ...interface{}) (chan []byte, error) {
@@ -238,4 +265,91 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string
 		}
 	}()
 	return txnChan, nil
+}
+
+func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey,
+	rawUserTransaction *types.RawUserTransaction) (interface{}, error) {
+	signedUserTransaction, err := signTxn(privateKey, rawUserTransaction)
+	if err != nil {
+		return nil, errors.Wrap(err, "gen SignedUserTransaction failed")
+	}
+
+	signedUserTransactionBytes, err := signedUserTransaction.BcsSerialize()
+	if err != nil {
+		return nil, errors.Wrap(err, "Bcs Serialize  SignedUserTransaction failed")
+	}
+
+	var result string
+	params := []string{hex.EncodeToString(signedUserTransactionBytes)}
+	err = this.Call("txpool.submit_hex_transaction", &result, params)
+
+	if err != nil {
+		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
+		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	return result, nil
+}
+
+func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (interface{}, error) {
+	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
+	if err != nil {
+		return nil, errors.Wrap(err, "decode core address failed")
+	}
+
+	var addressArray [16]byte
+
+	copy(addressArray[:], coreAddress[:16])
+	coinType := types.StructTag{
+		Address: types.AccountAddress(addressArray),
+		Module:  types.Identifier("STC"),
+		Name:    types.Identifier("STC"),
+	}
+	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{coinType}, receiver, amount)
+
+	rawUserTransaction, err := this.buildRawUserTransaction(sender, payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "build raw user transaction failed")
+	}
+
+	return this.SubmitTransaction(privateKey, rawUserTransaction)
+}
+
+func (this *StarcoinClient) buildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload) (*types.RawUserTransaction, error) {
+	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	price, err := this.getGasUnitPrice()
+	if err != nil {
+		return nil, errors.Wrap(err, "get gas unit price failed ")
+	}
+
+	nodeInfo, err := this.GetNodeInfo()
+	if err != nil {
+		return nil, errors.Wrap(err, "get node info failed ")
+	}
+	return &types.RawUserTransaction{
+		sender,
+		state.SequenceNumber,
+		payload,
+		DEFAULT_MAX_GAS_AMOUNT,
+		uint64(price),
+		GAS_TOKEN_CODE,
+		uint64(nodeInfo.NowSeconds + DEFAULT_TRANSACTION_EXPIRATION_SECONDS),
+		types.ChainId{uint8(nodeInfo.PeerInfo.ChainInfo.ChainID)},
+	}, nil
+}
+
+func (this *StarcoinClient) getGasUnitPrice() (int, error) {
+	var result string
+	err := this.Call("txpool.gas_price", &result, nil)
+
+	if err != nil {
+		return 1, errors.Wrap(err, "call method txpool.gas_price ")
+	}
+
+	return strconv.Atoi(result)
 }

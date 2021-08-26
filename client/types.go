@@ -129,6 +129,41 @@ type EventFilter struct {
 	EventKeys []string `json:"event_keys"`
 }
 
+type NodeInfo struct {
+	PeerInfo struct {
+		PeerID    string `json:"peer_id"`
+		ChainInfo struct {
+			ChainID     int         `json:"chain_id"`
+			GenesisHash string      `json:"genesis_hash"`
+			Header      BlockHeader `json:"head"`
+			BlockInfo   struct {
+				BlockID            string `json:"block_id"`
+				TotalDifficulty    string `json:"total_difficulty"`
+				TxnAccumulatorInfo struct {
+					AccumulatorRoot    string   `json:"accumulator_root"`
+					FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
+					NumLeaves          int      `json:"num_leaves"`
+					NumNodes           int      `json:"num_nodes"`
+				} `json:"txn_accumulator_info"`
+				BlockAccumulatorInfo struct {
+					AccumulatorRoot    string   `json:"accumulator_root"`
+					FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
+					NumLeaves          int      `json:"num_leaves"`
+					NumNodes           int      `json:"num_nodes"`
+				} `json:"block_accumulator_info"`
+			} `json:"block_info"`
+		} `json:"chain_info"`
+		NotifProtocols string `json:"notif_protocols"`
+		RPCProtocols   string `json:"rpc_protocols"`
+	} `json:"peer_info"`
+	SelfAddress string `json:"self_address"`
+	Net         string `json:"net"`
+	Consensus   struct {
+		Type string `json:"type"`
+	} `json:"consensus"`
+	NowSeconds int `json:"now_seconds"`
+}
+
 func NewSendRecvEventFilters(addr string, fromBlock uint64) EventFilter {
 	addr = strings.ReplaceAll(addr, "0x", "")
 	eventKeys := []string{fmt.Sprintf("%s%s", recvPrefix, addr), fmt.Sprintf("%s%s", sendPrefix, addr)}

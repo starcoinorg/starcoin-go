@@ -3,7 +3,7 @@ package stdlib
 import (
 	"fmt"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
-	"github.com/starcoinorg/starcoin-go/types"
+	diemtypes "github.com/starcoinorg/starcoin-go/types"
 )
 
 // Structured representation of a call into a known Move transaction script (legacy).

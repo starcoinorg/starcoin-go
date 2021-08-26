@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-
 	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/client/jsonrpc/codec"
 	"github.com/valyala/fasthttp"
