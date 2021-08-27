@@ -151,4 +151,4 @@ starcoin -n dev --http-apis all console
 
 ## License
 
-starcoin-java is licensed as [Apache 2.0](./LICENSE).
+starcoin-go is licensed as [Apache 2.0](./LICENSE).
