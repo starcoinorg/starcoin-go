@@ -96,7 +96,7 @@ func (this *StarcoinClient) GetTransactionInfoByHash(transactionHash string) (*T
 }
 
 func (this *StarcoinClient) GetTransactionEventByHash(transactionHash string) ([]Event, error) {
-	result := make([]Event, 0, 100)
+	var result []Event
 	params := []string{transactionHash}
 	err := this.Call("chain.get_events_by_txn_hash", &result, params)
 
@@ -135,7 +135,7 @@ func (this *StarcoinClient) GetBlockByNumber(number int) (*Block, error) {
 }
 
 func (this *StarcoinClient) GetBlocksFromNumber(number, count int) ([]Block, error) {
-	result := make([]Block, 0, count)
+	var result []Block
 	params := []int{number, count}
 	err := this.Call("chain.get_blocks_by_number", &result, params)
 
@@ -163,7 +163,7 @@ func (this *StarcoinClient) GetResource(address string) (*ListResource, error) {
 }
 
 func (this *StarcoinClient) GetState(address string) (*types.AccountResource, error) {
-	result := make([]byte, 0, 200)
+	var result []byte
 	params := []string{address + "/1/0x00000000000000000000000000000001::Account::Account"}
 	err := this.Call("state.get", &result, params)
 
@@ -307,7 +307,7 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{coinType}, receiver, amount)
 
-	rawUserTransaction, err := this.buildRawUserTransaction(sender, payload)
+	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload)
 	if err != nil {
 		return nil, errors.Wrap(err, "build raw user transaction failed")
 	}
@@ -315,14 +315,14 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	return this.SubmitTransaction(privateKey, rawUserTransaction)
 }
 
-func (this *StarcoinClient) buildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload) (*types.RawUserTransaction, error) {
+func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload) (*types.RawUserTransaction, error) {
 	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
 
 	if err != nil {
 		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
-	price, err := this.getGasUnitPrice()
+	price, err := this.GetGasUnitPrice()
 	if err != nil {
 		return nil, errors.Wrap(err, "get gas unit price failed ")
 	}
@@ -343,7 +343,7 @@ func (this *StarcoinClient) buildRawUserTransaction(sender types.AccountAddress,
 	}, nil
 }
 
-func (this *StarcoinClient) getGasUnitPrice() (int, error) {
+func (this *StarcoinClient) GetGasUnitPrice() (int, error) {
 	var result string
 	err := this.Call("txpool.gas_price", &result, nil)
 
@@ -352,4 +352,15 @@ func (this *StarcoinClient) getGasUnitPrice() (int, error) {
 	}
 
 	return strconv.Atoi(result)
+}
+
+func (this *StarcoinClient) CallContract(call ContractCall) (interface{},error){
+	var result []interface{}
+	err := this.Call("contract.call_v2", &result, []interface{}{call})
+
+	if err != nil {
+		return 1, errors.Wrap(err, "call method contract.call_v2 ")
+	}
+
+	return result,nil
 }

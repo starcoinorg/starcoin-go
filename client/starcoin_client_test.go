@@ -77,12 +77,25 @@ func TestHttpCall(t *testing.T) {
 
 	fmt.Println(result)
 
-	result, err = client.getGasUnitPrice()
+	result, err = client.GetGasUnitPrice()
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
+
+	call := ContractCall{
+		"0x00000000000000000000000000000001::Token::market_cap",
+		[]string{"0x00000000000000000000000000000001::STC::STC"},
+		[]string{},
+	}
+	result , err = client.CallContract(call)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Println(result)
+
 }
 
 func TestWsCall(t *testing.T) {
