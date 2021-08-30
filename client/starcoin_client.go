@@ -16,6 +16,7 @@ import (
 const DEFAULT_MAX_GAS_AMOUNT = 10000000
 const GAS_TOKEN_CODE = "0x1::STC::STC"
 const DEFAULT_TRANSACTION_EXPIRATION_SECONDS = 2 * 60 * 60
+const emptyString = ""
 
 type StarcoinClient struct {
 	url string
@@ -268,15 +269,15 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string
 }
 
 func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey,
-	rawUserTransaction *types.RawUserTransaction) (interface{}, error) {
+	rawUserTransaction *types.RawUserTransaction) (string, error) {
 	signedUserTransaction, err := signTxn(privateKey, rawUserTransaction)
 	if err != nil {
-		return nil, errors.Wrap(err, "gen SignedUserTransaction failed")
+		return emptyString, errors.Wrap(err, "gen SignedUserTransaction failed")
 	}
 
 	signedUserTransactionBytes, err := signedUserTransaction.BcsSerialize()
 	if err != nil {
-		return nil, errors.Wrap(err, "Bcs Serialize  SignedUserTransaction failed")
+		return emptyString, errors.Wrap(err, "Bcs Serialize  SignedUserTransaction failed")
 	}
 
 	var result string
@@ -285,16 +286,16 @@ func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey
 
 	if err != nil {
 		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
-		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
+		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (interface{}, error) {
+func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (string, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
-		return nil, errors.Wrap(err, "decode core address failed")
+		return emptyString, errors.Wrap(err, "decode core address failed")
 	}
 
 	var addressArray [16]byte
@@ -309,7 +310,7 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 
 	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload)
 	if err != nil {
-		return nil, errors.Wrap(err, "build raw user transaction failed")
+		return emptyString, errors.Wrap(err, "build raw user transaction failed")
 	}
 
 	return this.SubmitTransaction(privateKey, rawUserTransaction)
@@ -363,4 +364,26 @@ func (this *StarcoinClient) CallContract(call ContractCall) (interface{}, error)
 	}
 
 	return result, nil
+}
+
+func (this *StarcoinClient) DeployContract(sender types.AccountAddress, privateKey types.Ed25519PrivateKey,
+	function types.ScriptFunction, code []byte) (string, error) {
+	module := types.Module{
+		code,
+	}
+	pk := types.Package{
+		sender,
+		[]types.Module{module},
+		&function,
+	}
+	packagePayload := types.TransactionPayload__Package{
+		pk,
+	}
+
+	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload)
+	if err != nil {
+		return emptyString, errors.Wrap(err, "build raw user txn failed")
+	}
+
+	return this.SubmitTransaction(privateKey, rawTransactoin)
 }
