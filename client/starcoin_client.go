@@ -354,7 +354,7 @@ func (this *StarcoinClient) GetGasUnitPrice() (int, error) {
 	return strconv.Atoi(result)
 }
 
-func (this *StarcoinClient) CallContract(call ContractCall) (interface{},error){
+func (this *StarcoinClient) CallContract(call ContractCall) (interface{}, error) {
 	var result []interface{}
 	err := this.Call("contract.call_v2", &result, []interface{}{call})
 
@@ -362,5 +362,5 @@ func (this *StarcoinClient) CallContract(call ContractCall) (interface{},error){
 		return 1, errors.Wrap(err, "call method contract.call_v2 ")
 	}
 
-	return result,nil
+	return result, nil
 }

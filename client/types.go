@@ -165,9 +165,9 @@ type NodeInfo struct {
 }
 
 type ContractCall struct {
-	FunctionId string `json:"function_id"`
-	TypeArgs []string `json:"type_args"`
-	Args []string `json:"args"`
+	FunctionId string   `json:"function_id"`
+	TypeArgs   []string `json:"type_args"`
+	Args       []string `json:"args"`
 }
 
 func NewSendRecvEventFilters(addr string, fromBlock uint64) EventFilter {

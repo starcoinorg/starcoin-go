@@ -89,7 +89,7 @@ func TestHttpCall(t *testing.T) {
 		[]string{"0x00000000000000000000000000000001::STC::STC"},
 		[]string{},
 	}
-	result , err = client.CallContract(call)
+	result, err = client.CallContract(call)
 	if err != nil {
 		t.Error(err)
 	}
