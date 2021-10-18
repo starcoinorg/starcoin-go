@@ -98,6 +98,18 @@ func TestHttpCall(t *testing.T) {
 
 }
 
+func TestBalance(t *testing.T){
+	client := NewStarcoinClient("http://localhost:9850")
+	var result *ListResource
+
+	result, err := client.GetResource("0x79f75dc7cb6812760e1afba01dc9380e")
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Println(result.GetBalanceOfStc())
+}
+
 func TestWsCall(t *testing.T) {
 	client := NewStarcoinClient("ws://localhost:9870")
 

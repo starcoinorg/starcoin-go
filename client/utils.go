@@ -6,6 +6,7 @@ import (
 	owcrypt "github.com/blocktree/go-owcrypt"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
+	"math/big"
 
 	"encoding/hex"
 	"github.com/pkg/errors"
@@ -70,6 +71,28 @@ func encode_u128_argument(arg serde.Uint128) []byte {
 	}
 
 	panic("Unable to serialize argument of type u64")
+}
+
+func decode_u128_argument(data []byte) (*serde.Uint128,error){
+	s := bcs.NewDeserializer(data)
+	result,err := s.DeserializeU128()
+
+	if err != nil {
+		return nil,errors.Wrap(err,"can't deserialize U128")
+	}
+
+	return &result,nil
+}
+
+func u128_to_bigInt(value *serde.Uint128) *big.Int {
+	result := big.NewInt(0)
+	result.SetUint64(value.High)
+	result.Lsh(result,64)
+
+	lowValue := &big.Int{}
+	result.SetUint64(value.Low)
+
+	return result.Add(result,lowValue)
 }
 
 func encode_address_argument(arg types.AccountAddress) []byte {
