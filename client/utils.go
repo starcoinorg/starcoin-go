@@ -2,10 +2,12 @@ package client
 
 import (
 	"bytes"
+	"fmt"
 	owcrypt "github.com/blocktree/go-owcrypt"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 
+	"encoding/hex"
 	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/types"
 	"golang.org/x/crypto/sha3"
@@ -79,4 +81,20 @@ func encode_address_argument(arg types.AccountAddress) []byte {
 	}
 
 	panic("Unable to serialize argument of type address")
+}
+
+func PublicKeyToAddressBytes(pk [32]byte) []byte {
+	var buf bytes.Buffer
+
+	buf.Write(pk[:])
+	buf.WriteByte(0)
+
+	data := sha3.Sum256(buf.Bytes())
+
+	return data[16:32]
+}
+
+func PublicKeyToAddress(pk [32]byte) string {
+	pkBytes := PublicKeyToAddressBytes(pk)
+	return fmt.Sprintf("0x%s",hex.EncodeToString(pkBytes))
 }
