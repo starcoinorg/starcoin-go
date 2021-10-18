@@ -308,7 +308,12 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{coinType}, receiver, amount)
 
-	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload)
+	price, err := this.GetGasUnitPrice()
+	if err != nil {
+		return "", errors.Wrap(err, "get gas unit price failed ")
+	}
+
+	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload,price,DEFAULT_MAX_GAS_AMOUNT)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user transaction failed")
 	}
@@ -316,16 +321,35 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	return this.SubmitTransaction(privateKey, rawUserTransaction)
 }
 
-func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload) (*types.RawUserTransaction, error) {
+func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128,price int,gasLimit uint64) (string, error) {
+	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
+	if err != nil {
+		return emptyString, errors.Wrap(err, "decode core address failed")
+	}
+
+	var addressArray [16]byte
+
+	copy(addressArray[:], coreAddress[:16])
+	coinType := types.StructTag{
+		Address: types.AccountAddress(addressArray),
+		Module:  types.Identifier("STC"),
+		Name:    types.Identifier("STC"),
+	}
+	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{coinType}, receiver, amount)
+
+	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload,price,gasLimit)
+	if err != nil {
+		return emptyString, errors.Wrap(err, "build raw user transaction failed")
+	}
+
+	return this.SubmitTransaction(privateKey, rawUserTransaction)
+}
+
+func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload,gasPrice int,gasLimit uint64) (*types.RawUserTransaction, error) {
 	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
 
 	if err != nil {
 		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
-	}
-
-	price, err := this.GetGasUnitPrice()
-	if err != nil {
-		return nil, errors.Wrap(err, "get gas unit price failed ")
 	}
 
 	nodeInfo, err := this.GetNodeInfo()
@@ -336,8 +360,8 @@ func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress,
 		sender,
 		state.SequenceNumber,
 		payload,
-		DEFAULT_MAX_GAS_AMOUNT,
-		uint64(price),
+		gasLimit,
+		uint64(gasPrice),
 		GAS_TOKEN_CODE,
 		uint64(nodeInfo.NowSeconds + DEFAULT_TRANSACTION_EXPIRATION_SECONDS),
 		types.ChainId{uint8(nodeInfo.PeerInfo.ChainInfo.ChainID)},
@@ -380,7 +404,12 @@ func (this *StarcoinClient) DeployContract(sender types.AccountAddress, privateK
 		pk,
 	}
 
-	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload)
+	price, err := this.GetGasUnitPrice()
+	if err != nil {
+		return "", errors.Wrap(err, "get gas unit price failed ")
+	}
+
+	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload,price,DEFAULT_MAX_GAS_AMOUNT)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user txn failed")
 	}
