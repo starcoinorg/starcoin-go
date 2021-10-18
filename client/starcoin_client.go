@@ -321,7 +321,7 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	return this.SubmitTransaction(privateKey, rawUserTransaction)
 }
 
-func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128,price int,gasLimit uint64)  (*types.RawUserTransaction, error) {
+func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, receiver types.AccountAddress, amount serde.Uint128,price int,gasLimit uint64)  (*types.RawUserTransaction, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
 		return nil, errors.Wrap(err, "decode core address failed")
