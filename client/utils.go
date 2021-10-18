@@ -7,6 +7,7 @@ import (
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"math/big"
+	"strings"
 
 	"encoding/hex"
 	"github.com/pkg/errors"
@@ -120,4 +121,13 @@ func PublicKeyToAddressBytes(pk [32]byte) []byte {
 func PublicKeyToAddress(pk [32]byte) string {
 	pkBytes := PublicKeyToAddressBytes(pk)
 	return fmt.Sprintf("0x%s",hex.EncodeToString(pkBytes))
+}
+
+func ToAccountAddress(addr string) types.AccountAddress {
+	accountBytes, _ := hex.DecodeString(strings.Replace(addr,"0x","",1))
+
+	var addressArray [16]byte
+
+	copy(addressArray[:], accountBytes[:16])
+	return types.AccountAddress(addressArray)
 }
