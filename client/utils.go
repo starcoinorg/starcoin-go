@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	owcrypt "github.com/blocktree/go-owcrypt"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
@@ -85,15 +86,37 @@ func decode_u128_argument(data []byte) (*serde.Uint128,error){
 	return &result,nil
 }
 
-func u128_to_bigInt(value *serde.Uint128) *big.Int {
+func U128ToBigInt(value *serde.Uint128) *big.Int {
 	result := big.NewInt(0)
 	result.SetUint64(value.High)
 	result.Lsh(result,64)
 
 	lowValue := &big.Int{}
-	result.SetUint64(value.Low)
+	lowValue.SetUint64(value.Low)
 
 	return result.Add(result,lowValue)
+}
+
+func BigIntToU128(value *big.Int) (*serde.Uint128,error) {
+	valueBytes := value.Bytes()
+
+	highBytes := bytes.NewReader(valueBytes[:len(valueBytes)-8])
+	lowBytes := bytes.NewReader(valueBytes[len(valueBytes)-8:])
+
+	highValue ,err := binary.ReadUvarint(highBytes)
+	if err!=nil {
+		errors.WithStack(err)
+	}
+
+	lowValue ,err := binary.ReadUvarint(lowBytes)
+	if err!=nil {
+		errors.WithStack(err)
+	}
+
+	return &serde.Uint128{
+		High: highValue,
+		Low: lowValue,
+	},nil
 }
 
 func encode_address_argument(arg types.AccountAddress) []byte {
@@ -129,5 +152,5 @@ func ToAccountAddress(addr string) types.AccountAddress {
 	var addressArray [16]byte
 
 	copy(addressArray[:], accountBytes[:16])
-	return types.AccountAddress(addressArray)
+	return addressArray
 }

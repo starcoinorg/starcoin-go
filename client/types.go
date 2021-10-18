@@ -130,7 +130,7 @@ func (this ListResource) GetBalances() (map[string] *big.Int,error){
 				return nil,errors.Wrap(err,"can't parse data to u128")
 			}
 
-			result[k] = u128_to_bigInt(balance)
+			result[k] = U128ToBigInt(balance)
 		}
 	}
 
