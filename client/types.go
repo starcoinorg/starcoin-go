@@ -1,7 +1,10 @@
 package client
 
 import (
+	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
+	"math/big"
 	"strings"
 )
 
@@ -110,6 +113,44 @@ type Resource struct {
 
 type ListResource struct {
 	Resources map[string]Resource `json:"resources"`
+}
+
+func (this ListResource) GetBalances() (map[string] *big.Int,error){
+	result := make(map[string] *big.Int)
+
+	for k,v := range this.Resources {
+		if(strings.Contains(k,"Balance")){
+			data,err := hex.DecodeString(strings.Replace(v.Raw,"0x","",1))
+			if err!=nil {
+				return nil,errors.Wrap(err,"can't decode balance data")
+			}
+
+			balance, err := decode_u128_argument(data)
+			if err!=nil {
+				return nil,errors.Wrap(err,"can't parse data to u128")
+			}
+
+			result[k] = u128_to_bigInt(balance)
+		}
+	}
+
+	return result,nil
+}
+
+func (this ListResource) GetBalanceOfStc() (*big.Int,error){
+	balances,err := this.GetBalances()
+
+	if err!= nil {
+		return nil,errors.Wrap(err,"get stc balance error")
+	}
+
+	for k,v := range balances{
+		if k == "0x00000000000000000000000000000001::Account::Balance<0x00000000000000000000000000000001::STC::STC>" {
+			return v,nil
+		}
+	}
+
+	return big.NewInt(0),nil
 }
 
 type PendingTransaction struct {
