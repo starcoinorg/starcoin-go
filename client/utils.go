@@ -24,14 +24,14 @@ func hash(prefix, data []byte) []byte {
 	return hashData[:]
 }
 
-func prefixHash(name string) []byte {
+func PrefixHash(name string) []byte {
 	return hash([]byte("STARCOIN::"), []byte(name))
 }
 
 func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUserTransaction) (*types.SignedUserTransaction, error) {
 	data := bytes.Buffer{}
 
-	data.Write(prefixHash("RawUserTransaction"))
+	data.Write(PrefixHash("RawUserTransaction"))
 
 	rawTxnBytes, err := rawUserTransaction.BcsSerialize()
 	if err != nil {
