@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"testing"
 
 )
@@ -13,4 +14,22 @@ func TestPublicKeyToAddress(t *testing.T) {
 		t.Error("address should be 0x79f75dc7cb6812760e1afba01dc9380e")
 	}
 
+}
+
+func TestBigIntU128(t *testing.T){
+	data:=&serde.Uint128{
+		High: 1,
+		Low: 0,
+	}
+	bdata:= U128ToBigInt(data)
+
+	rebackData,err := BigIntToU128(bdata)
+
+	if err !=nil {
+		t.Error(err)
+	}
+
+	if rebackData.High != data.High && rebackData.Low != data.Low {
+		t.Error("should not be here")
+	}
 }
