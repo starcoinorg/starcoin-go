@@ -313,7 +313,13 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 		return "", errors.Wrap(err, "get gas unit price failed ")
 	}
 
-	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload,price,DEFAULT_MAX_GAS_AMOUNT)
+	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
+
+	if err != nil {
+		return "", errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload,price,DEFAULT_MAX_GAS_AMOUNT,state.SequenceNumber)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user transaction failed")
 	}
@@ -321,7 +327,7 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	return this.SubmitTransaction(privateKey, rawUserTransaction)
 }
 
-func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, receiver types.AccountAddress, amount serde.Uint128,price int,gasLimit uint64)  (*types.RawUserTransaction, error) {
+func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, receiver types.AccountAddress, amount serde.Uint128,price int,gasLimit,seq uint64)  (*types.RawUserTransaction, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
 		return nil, errors.Wrap(err, "decode core address failed")
@@ -337,23 +343,17 @@ func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, rec
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{coinType}, receiver, amount)
 
-	return  this.BuildRawUserTransaction(sender, payload,price,gasLimit)
+	return  this.BuildRawUserTransaction(sender, payload,price,gasLimit,seq)
 }
 
-func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload,gasPrice int,gasLimit uint64) (*types.RawUserTransaction, error) {
-	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "call txpool.submit_hex_transaction ")
-	}
-
+func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload,gasPrice int,gasLimit uint64,seq uint64) (*types.RawUserTransaction, error) {
 	nodeInfo, err := this.GetNodeInfo()
 	if err != nil {
 		return nil, errors.Wrap(err, "get node info failed ")
 	}
 	return &types.RawUserTransaction{
 		sender,
-		state.SequenceNumber,
+		seq,
 		payload,
 		gasLimit,
 		uint64(gasPrice),
@@ -404,7 +404,13 @@ func (this *StarcoinClient) DeployContract(sender types.AccountAddress, privateK
 		return "", errors.Wrap(err, "get gas unit price failed ")
 	}
 
-	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload,price,DEFAULT_MAX_GAS_AMOUNT)
+	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
+
+	if err != nil {
+		return "", errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload,price,DEFAULT_MAX_GAS_AMOUNT,state.SequenceNumber)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user txn failed")
 	}
