@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-func hash(prefix, data []byte) []byte {
+func Hash(prefix, data []byte) []byte {
 	concatData := bytes.Buffer{}
 	concatData.Write(prefix)
 	concatData.Write(data)
@@ -25,7 +25,7 @@ func hash(prefix, data []byte) []byte {
 }
 
 func PrefixHash(name string) []byte {
-	return hash([]byte("STARCOIN::"), []byte(name))
+	return Hash([]byte("STARCOIN::"), []byte(name))
 }
 
 func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUserTransaction) (*types.SignedUserTransaction, error) {
@@ -153,4 +153,12 @@ func ToAccountAddress(addr string) types.AccountAddress {
 
 	copy(addressArray[:], accountBytes[:16])
 	return addressArray
+}
+
+func Verify(pk []byte,message []byte, signature []byte) bool {
+	result := owcrypt.Verify(pk,nil,message,signature,owcrypt.ECC_CURVE_ED25519_NORMAL)
+	if result == owcrypt.SUCCESS {
+		return true
+	}
+	return false
 }
