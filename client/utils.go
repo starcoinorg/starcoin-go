@@ -154,3 +154,11 @@ func ToAccountAddress(addr string) types.AccountAddress {
 	copy(addressArray[:], accountBytes[:16])
 	return addressArray
 }
+
+func Verify(pk []byte,message []byte, signature []byte) bool {
+	result := owcrypt.Verify(pk,nil,message,signature,owcrypt.ECC_CURVE_ED25519_NORMAL)
+	if result == owcrypt.SUCCESS {
+		return true
+	}
+	return false
+}
