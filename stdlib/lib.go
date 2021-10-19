@@ -2,6 +2,7 @@ package stdlib
 
 import (
 	"fmt"
+
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	diemtypes "github.com/starcoinorg/starcoin-go/types"
 )

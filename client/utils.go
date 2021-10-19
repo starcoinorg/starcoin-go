@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	owcrypt "github.com/blocktree/go-owcrypt"
-	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
-	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"math/big"
 	"strings"
 
+	owcrypt "github.com/blocktree/go-owcrypt"
+	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
+	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
+
 	"encoding/hex"
+
 	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/types"
 	"golang.org/x/crypto/sha3"
@@ -75,48 +77,48 @@ func encode_u128_argument(arg serde.Uint128) []byte {
 	panic("Unable to serialize argument of type u64")
 }
 
-func decode_u128_argument(data []byte) (*serde.Uint128,error){
+func decode_u128_argument(data []byte) (*serde.Uint128, error) {
 	s := bcs.NewDeserializer(data)
-	result,err := s.DeserializeU128()
+	result, err := s.DeserializeU128()
 
 	if err != nil {
-		return nil,errors.Wrap(err,"can't deserialize U128")
+		return nil, errors.Wrap(err, "can't deserialize U128")
 	}
 
-	return &result,nil
+	return &result, nil
 }
 
 func U128ToBigInt(value *serde.Uint128) *big.Int {
 	result := big.NewInt(0)
 	result.SetUint64(value.High)
-	result.Lsh(result,64)
+	result.Lsh(result, 64)
 
 	lowValue := &big.Int{}
 	lowValue.SetUint64(value.Low)
 
-	return result.Add(result,lowValue)
+	return result.Add(result, lowValue)
 }
 
-func BigIntToU128(value *big.Int) (*serde.Uint128,error) {
+func BigIntToU128(value *big.Int) (*serde.Uint128, error) {
 	valueBytes := value.Bytes()
 
 	highBytes := bytes.NewReader(valueBytes[:len(valueBytes)-8])
 	lowBytes := bytes.NewReader(valueBytes[len(valueBytes)-8:])
 
-	highValue ,err := binary.ReadUvarint(highBytes)
-	if err!=nil {
+	highValue, err := binary.ReadUvarint(highBytes)
+	if err != nil {
 		errors.WithStack(err)
 	}
 
-	lowValue ,err := binary.ReadUvarint(lowBytes)
-	if err!=nil {
+	lowValue, err := binary.ReadUvarint(lowBytes)
+	if err != nil {
 		errors.WithStack(err)
 	}
 
 	return &serde.Uint128{
 		High: highValue,
-		Low: lowValue,
-	},nil
+		Low:  lowValue,
+	}, nil
 }
 
 func encode_address_argument(arg types.AccountAddress) []byte {
@@ -143,11 +145,11 @@ func PublicKeyToAddressBytes(pk [32]byte) []byte {
 
 func PublicKeyToAddress(pk [32]byte) string {
 	pkBytes := PublicKeyToAddressBytes(pk)
-	return fmt.Sprintf("0x%s",hex.EncodeToString(pkBytes))
+	return fmt.Sprintf("0x%s", hex.EncodeToString(pkBytes))
 }
 
 func ToAccountAddress(addr string) types.AccountAddress {
-	accountBytes, _ := hex.DecodeString(strings.Replace(addr,"0x","",1))
+	accountBytes, _ := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
 
 	var addressArray [16]byte
 
