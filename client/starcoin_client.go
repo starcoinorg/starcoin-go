@@ -164,6 +164,14 @@ func (this *StarcoinClient) GetResource(address string) (*ListResource, error) {
 	return result, nil
 }
 
+func (this *StarcoinClient) GetAccountSequenceNumber(address string) (uint64, error) {
+	state, err := this.GetState(address)
+	if err != nil {
+		return 0, err
+	}
+	return state.SequenceNumber, nil
+}
+
 func (this *StarcoinClient) GetState(address string) (*types.AccountResource, error) {
 	var result []byte
 	params := []string{address + "/1/0x00000000000000000000000000000001::Account::Account"}
