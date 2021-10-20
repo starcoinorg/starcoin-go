@@ -3,9 +3,10 @@ package client
 import (
 	"encoding/hex"
 	"fmt"
+	"testing"
+
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"github.com/starcoinorg/starcoin-go/types"
-	"testing"
 
 	owcrypt "github.com/blocktree/go-owcrypt"
 )
@@ -98,7 +99,7 @@ func TestHttpCall(t *testing.T) {
 
 }
 
-func TestBalance(t *testing.T){
+func TestBalance(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	var result *ListResource
 
@@ -189,15 +190,15 @@ func TestDeployContract(t *testing.T) {
 	code := []byte{161, 28, 235, 11, 2, 0, 0, 0, 9, 1, 0, 4, 2, 4, 4, 3, 8, 25, 5, 33, 12, 7, 45, 78, 8, 123, 32, 10, 155, 1, 5, 12, 160, 1, 81, 13, 241, 1, 2, 0, 0, 1, 1, 0, 2, 12, 0, 0, 3, 0, 1, 0, 0, 4, 2, 1, 0, 0, 5, 0, 1, 0, 0, 6, 2, 1, 0, 1, 8, 0, 4, 0, 1, 6, 12, 0, 1, 12, 1, 7, 8, 0, 1, 5, 9, 77, 121, 67, 111, 117, 110, 116, 101, 114, 6, 83, 105, 103, 110, 101, 114, 7, 67, 111, 117, 110, 116, 101, 114, 4, 105, 110, 99, 114, 12, 105, 110, 99, 114, 95, 99, 111, 117, 110, 116, 101, 114, 4, 105, 110, 105, 116, 12, 105, 110, 105, 116, 95, 99, 111, 117, 110, 116, 101, 114, 5, 118, 97, 108, 117, 101, 10, 97, 100, 100, 114, 101, 115, 115, 95, 111, 102, 248, 175, 3, 221, 8, 222, 73, 216, 30, 78, 253, 158, 36, 192, 57, 204, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 1, 7, 3, 0, 1, 0, 1, 0, 3, 13, 11, 0, 17, 4, 42, 0, 12, 1, 10, 1, 16, 0, 20, 6, 1, 0, 0, 0, 0, 0, 0, 0, 22, 11, 1, 15, 0, 21, 2, 1, 2, 0, 1, 0, 1, 3, 14, 0, 17, 0, 2, 2, 1, 0, 0, 1, 5, 11, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 18, 0, 45, 0, 2, 3, 2, 0, 0, 1, 3, 14, 0, 17, 2, 2, 0, 0, 0}
 
 	moduleId := types.ModuleId{
-		ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"),
-		"xxxx",
+		Address: ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"),
+		Name:    "xxxx",
 	}
 
 	scriptFunction := types.ScriptFunction{
-		moduleId,
-		"init",
-		[]types.TypeTag{},
-		[][]byte{},
+		Module:   moduleId,
+		Function: "init",
+		TyArgs:   []types.TypeTag{},
+		Args:     [][]byte{},
 	}
 	client.DeployContract(ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"), privateKey, scriptFunction, code)
 }
