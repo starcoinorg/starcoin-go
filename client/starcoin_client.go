@@ -301,6 +301,39 @@ func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey
 	return result, nil
 }
 
+func (this *StarcoinClient) SubmitSignedTransaction(
+	userTxn *types.SignedUserTransaction) (string, error) {
+	signedUserTransactionBytes, err := userTxn.BcsSerialize()
+	if err != nil {
+		return emptyString, errors.Wrap(err, "Bcs Serialize  SignedUserTransaction failed")
+	}
+
+	var result string
+	params := []string{hex.EncodeToString(signedUserTransactionBytes)}
+	err = this.Call("txpool.submit_hex_transaction", &result, params)
+
+	if err != nil {
+		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
+		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	return result, nil
+}
+
+func (this *StarcoinClient) SubmitSignedTransactionBytes(
+	userTxn []byte) (string, error) {
+	var result string
+	params := []string{hex.EncodeToString(userTxn)}
+	err := this.Call("txpool.submit_hex_transaction", &result, params)
+
+	if err != nil {
+		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
+		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
+	}
+
+	return result, nil
+}
+
 func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (string, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
