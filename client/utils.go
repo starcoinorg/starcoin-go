@@ -164,3 +164,11 @@ func Verify(pk []byte, message []byte, signature []byte) bool {
 	}
 	return false
 }
+
+func BytesToHexString(data []byte) string{
+	return fmt.Sprintf("0x%s",hex.EncodeToString(data))
+}
+
+func HexStringToBytes(hexString string) ([]byte,error){
+	return hex.DecodeString(strings.Replace(hexString,"0x","",1))
+}
