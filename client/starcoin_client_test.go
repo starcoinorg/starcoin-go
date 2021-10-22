@@ -154,6 +154,18 @@ func TestSubmitTransaction(t *testing.T) {
 	fmt.Println(result)
 }
 
+func TestNodeInfo(t *testing.T) {
+	client := NewStarcoinClient("http://localhost:9850")
+	var result interface{}
+
+	result, err := client.GetNodeInfo()
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Println(result)
+}
+
 func TestSign(t *testing.T) {
 	privateKeyString := "587737ebefb4961d377a3ab2f9ceb37b1fa96eb862dfaf954a4a1a99535dfec0"
 	publicKeyString := "32ed52d319694aebc5b52e00836e2f7c7d2c7c7791270ede450d21dbc90cbfa1"

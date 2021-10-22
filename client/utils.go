@@ -172,3 +172,21 @@ func BytesToHexString(data []byte) string{
 func HexStringToBytes(hexString string) ([]byte,error){
 	return hex.DecodeString(strings.Replace(hexString,"0x","",1))
 }
+
+func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte,error){
+	data,err := txn.BcsSerialize()
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	return Hash(PrefixHash("RawUserTransaction"),data),nil
+}
+
+func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte,error){
+	data,err := txn.BcsSerialize()
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	return Hash(PrefixHash("SignedUserTransaction"),data),nil
+}
