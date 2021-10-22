@@ -214,3 +214,15 @@ func TestDeployContract(t *testing.T) {
 	}
 	client.DeployContract(ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"), privateKey, scriptFunction, code)
 }
+
+func TestGetEvents(t *testing.T) {
+	client := NewStarcoinClient("http://localhost:9850")
+	events, err := client.GetEvents(&EventFilter{
+		FromBlock: 0,
+		ToBlock:   32,
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(events)
+}

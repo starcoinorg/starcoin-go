@@ -58,6 +58,17 @@ func (this *StarcoinClient) GetNodeInfo() (*NodeInfo, error) {
 	return result, nil
 }
 
+func (this *StarcoinClient) GetEvents(eventFilter *EventFilter) ([]Event, error) {
+	var result []Event
+	params := []interface{}{eventFilter}
+	err := this.Call("chain.get_events", &result, params)
+	if err != nil {
+		log.Fatalln("call chain.get_events err: ", err)
+		return nil, errors.Wrap(err, "call method chain.get_events error ")
+	}
+	return result, nil
+}
+
 func (this *StarcoinClient) GetTransactionByHash(transactionHash string) (*Transaction, error) {
 	result := &Transaction{}
 	params := []string{transactionHash}
