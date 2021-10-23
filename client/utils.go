@@ -148,13 +148,16 @@ func PublicKeyToAddress(pk [32]byte) string {
 	return fmt.Sprintf("0x%s", hex.EncodeToString(pkBytes))
 }
 
-func ToAccountAddress(addr string) types.AccountAddress {
-	accountBytes, _ := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
+func ToAccountAddress(addr string) (*types.AccountAddress,error) {
+	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
 
-	var addressArray [16]byte
+	var addressArray types.AccountAddress//[16]byte
 
 	copy(addressArray[:], accountBytes[:16])
-	return addressArray
+	return &addressArray,nil
 }
 
 func Verify(pk []byte, message []byte, signature []byte) bool {
