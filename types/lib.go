@@ -74,7 +74,7 @@ func (obj *AccountAddress) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serialize_array16_u8_array((([16]uint8)(*obj)), serializer); err != nil {
+	if err := serialize_array16_u8_array(([16]uint8)(*obj), serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -100,7 +100,7 @@ func DeserializeAccountAddress(deserializer serde.Deserializer) (AccountAddress,
 	if val, err := deserialize_array16_u8_array(deserializer); err == nil {
 		obj = val
 	} else {
-		return ((AccountAddress)(obj)), err
+		return (AccountAddress)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (AccountAddress)(obj), nil
@@ -294,7 +294,7 @@ func (obj *AuthenticationKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -320,7 +320,7 @@ func DeserializeAuthenticationKey(deserializer serde.Deserializer) (Authenticati
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((AuthenticationKey)(obj)), err
+		return (AuthenticationKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (AuthenticationKey)(obj), nil
@@ -333,6 +333,227 @@ func BcsDeserializeAuthenticationKey(input []byte) (AuthenticationKey, error) {
 	}
 	deserializer := bcs.NewDeserializer(input)
 	obj, err := DeserializeAuthenticationKey(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type BlockHeader struct {
+	ParentHash           HashValue
+	Timestamp            uint64
+	Number               uint64
+	Author               AccountAddress
+	AuthorAuthKey        *AuthenticationKey
+	TxnAccumulatorRoot   HashValue
+	BlockAccumulatorRoot HashValue
+	StateRoot            HashValue
+	GasUsed              uint64
+	Difficulty           [32]uint8
+	BodyHash             HashValue
+	ChainId              ChainId
+	Nonce                uint32
+	Extra                BlockHeaderExtra
+}
+
+func (obj *BlockHeader) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.ParentHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.Timestamp); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.Number); err != nil {
+		return err
+	}
+	if err := obj.Author.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serialize_option_AuthenticationKey(obj.AuthorAuthKey, serializer); err != nil {
+		return err
+	}
+	if err := obj.TxnAccumulatorRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.BlockAccumulatorRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.StateRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.GasUsed); err != nil {
+		return err
+	}
+	if err := serialize_array32_u8_array(obj.Difficulty, serializer); err != nil {
+		return err
+	}
+	if err := obj.BodyHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.ChainId.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU32(obj.Nonce); err != nil {
+		return err
+	}
+	if err := obj.Extra.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *BlockHeader) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeBlockHeader(deserializer serde.Deserializer) (BlockHeader, error) {
+	var obj BlockHeader
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.ParentHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.Timestamp = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.Number = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeAccountAddress(deserializer); err == nil {
+		obj.Author = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_option_AuthenticationKey(deserializer); err == nil {
+		obj.AuthorAuthKey = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.TxnAccumulatorRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.BlockAccumulatorRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.StateRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.GasUsed = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_array32_u8_array(deserializer); err == nil {
+		obj.Difficulty = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.BodyHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeChainId(deserializer); err == nil {
+		obj.ChainId = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU32(); err == nil {
+		obj.Nonce = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeBlockHeaderExtra(deserializer); err == nil {
+		obj.Extra = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeBlockHeader(input []byte) (BlockHeader, error) {
+	if input == nil {
+		var obj BlockHeader
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeBlockHeader(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type BlockHeaderExtra [4]uint8
+
+func (obj *BlockHeaderExtra) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := serialize_array4_u8_array(([4]uint8)(*obj), serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *BlockHeaderExtra) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeBlockHeaderExtra(deserializer serde.Deserializer) (BlockHeaderExtra, error) {
+	var obj [4]uint8
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return (BlockHeaderExtra)(obj), err
+	}
+	if val, err := deserialize_array4_u8_array(deserializer); err == nil {
+		obj = val
+	} else {
+		return (BlockHeaderExtra)(obj), err
+	}
+	deserializer.DecreaseContainerDepth()
+	return (BlockHeaderExtra)(obj), nil
+}
+
+func BcsDeserializeBlockHeaderExtra(input []byte) (BlockHeaderExtra, error) {
+	if input == nil {
+		var obj BlockHeaderExtra
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeBlockHeaderExtra(deserializer)
 	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
 		return obj, fmt.Errorf("Some input bytes were not read")
 	}
@@ -919,7 +1140,7 @@ func (obj *Ed25519PrivateKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -945,7 +1166,7 @@ func DeserializeEd25519PrivateKey(deserializer serde.Deserializer) (Ed25519Priva
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((Ed25519PrivateKey)(obj)), err
+		return (Ed25519PrivateKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (Ed25519PrivateKey)(obj), nil
@@ -970,7 +1191,7 @@ func (obj *Ed25519PublicKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -996,7 +1217,7 @@ func DeserializeEd25519PublicKey(deserializer serde.Deserializer) (Ed25519Public
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((Ed25519PublicKey)(obj)), err
+		return (Ed25519PublicKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (Ed25519PublicKey)(obj), nil
@@ -1021,7 +1242,7 @@ func (obj *Ed25519Signature) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1047,7 +1268,7 @@ func DeserializeEd25519Signature(deserializer serde.Deserializer) (Ed25519Signat
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((Ed25519Signature)(obj)), err
+		return (Ed25519Signature)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (Ed25519Signature)(obj), nil
@@ -1134,7 +1355,7 @@ func (obj *EventKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1160,7 +1381,7 @@ func DeserializeEventKey(deserializer serde.Deserializer) (EventKey, error) {
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((EventKey)(obj)), err
+		return (EventKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (EventKey)(obj), nil
@@ -1185,7 +1406,7 @@ func (obj *HashValue) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1211,7 +1432,7 @@ func DeserializeHashValue(deserializer serde.Deserializer) (HashValue, error) {
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((HashValue)(obj)), err
+		return (HashValue)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (HashValue)(obj), nil
@@ -1236,7 +1457,7 @@ func (obj *Identifier) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeStr(((string)(*obj))); err != nil {
+	if err := serializer.SerializeStr((string)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1262,7 +1483,7 @@ func DeserializeIdentifier(deserializer serde.Deserializer) (Identifier, error) 
 	if val, err := deserializer.DeserializeStr(); err == nil {
 		obj = val
 	} else {
-		return ((Identifier)(obj)), err
+		return (Identifier)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (Identifier)(obj), nil
@@ -1455,7 +1676,7 @@ func (obj *MultiEd25519PrivateKey) Serialize(serializer serde.Serializer) error 
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1481,7 +1702,7 @@ func DeserializeMultiEd25519PrivateKey(deserializer serde.Deserializer) (MultiEd
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((MultiEd25519PrivateKey)(obj)), err
+		return (MultiEd25519PrivateKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (MultiEd25519PrivateKey)(obj), nil
@@ -1506,7 +1727,7 @@ func (obj *MultiEd25519PublicKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1532,7 +1753,7 @@ func DeserializeMultiEd25519PublicKey(deserializer serde.Deserializer) (MultiEd2
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((MultiEd25519PublicKey)(obj)), err
+		return (MultiEd25519PublicKey)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (MultiEd25519PublicKey)(obj), nil
@@ -1557,7 +1778,7 @@ func (obj *MultiEd25519Signature) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -1583,7 +1804,7 @@ func DeserializeMultiEd25519Signature(deserializer serde.Deserializer) (MultiEd2
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((MultiEd25519Signature)(obj)), err
+		return (MultiEd25519Signature)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (MultiEd25519Signature)(obj), nil
@@ -1995,7 +2216,7 @@ type ScriptFunction struct {
 	Module   ModuleId
 	Function Identifier
 	TyArgs   []TypeTag
-	Args     [][]byte
+	Args     []TransactionArgument
 }
 
 func (obj *ScriptFunction) Serialize(serializer serde.Serializer) error {
@@ -2011,7 +2232,7 @@ func (obj *ScriptFunction) Serialize(serializer serde.Serializer) error {
 	if err := serialize_vector_TypeTag(obj.TyArgs, serializer); err != nil {
 		return err
 	}
-	if err := serialize_vector_bytes(obj.Args, serializer); err != nil {
+	if err := serialize_vector_TransactionArgument(obj.Args, serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2049,7 +2270,7 @@ func DeserializeScriptFunction(deserializer serde.Deserializer) (ScriptFunction,
 	} else {
 		return obj, err
 	}
-	if val, err := deserialize_vector_bytes(deserializer); err == nil {
+	if val, err := deserialize_vector_TransactionArgument(deserializer); err == nil {
 		obj.Args = val
 	} else {
 		return obj, err
@@ -2308,7 +2529,7 @@ func (obj *SigningMessage) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serialize_vector_u8((([]uint8)(*obj)), serializer); err != nil {
+	if err := serialize_vector_u8(([]uint8)(*obj), serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2334,7 +2555,7 @@ func DeserializeSigningMessage(deserializer serde.Deserializer) (SigningMessage,
 	if val, err := deserialize_vector_u8(deserializer); err == nil {
 		obj = val
 	} else {
-		return ((SigningMessage)(obj)), err
+		return (SigningMessage)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (SigningMessage)(obj), nil
@@ -2646,7 +2867,7 @@ func (obj *TransactionArgument__U8) Serialize(serializer serde.Serializer) error
 		return err
 	}
 	serializer.SerializeVariantIndex(0)
-	if err := serializer.SerializeU8(((uint8)(*obj))); err != nil {
+	if err := serializer.SerializeU8((uint8)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2672,7 +2893,7 @@ func load_TransactionArgument__U8(deserializer serde.Deserializer) (TransactionA
 	if val, err := deserializer.DeserializeU8(); err == nil {
 		obj = val
 	} else {
-		return ((TransactionArgument__U8)(obj)), err
+		return (TransactionArgument__U8)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__U8)(obj), nil
@@ -2687,7 +2908,7 @@ func (obj *TransactionArgument__U64) Serialize(serializer serde.Serializer) erro
 		return err
 	}
 	serializer.SerializeVariantIndex(1)
-	if err := serializer.SerializeU64(((uint64)(*obj))); err != nil {
+	if err := serializer.SerializeU64((uint64)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2713,7 +2934,7 @@ func load_TransactionArgument__U64(deserializer serde.Deserializer) (Transaction
 	if val, err := deserializer.DeserializeU64(); err == nil {
 		obj = val
 	} else {
-		return ((TransactionArgument__U64)(obj)), err
+		return (TransactionArgument__U64)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__U64)(obj), nil
@@ -2728,7 +2949,7 @@ func (obj *TransactionArgument__U128) Serialize(serializer serde.Serializer) err
 		return err
 	}
 	serializer.SerializeVariantIndex(2)
-	if err := serializer.SerializeU128(((serde.Uint128)(*obj))); err != nil {
+	if err := serializer.SerializeU128((serde.Uint128)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2754,7 +2975,7 @@ func load_TransactionArgument__U128(deserializer serde.Deserializer) (Transactio
 	if val, err := deserializer.DeserializeU128(); err == nil {
 		obj = val
 	} else {
-		return ((TransactionArgument__U128)(obj)), err
+		return (TransactionArgument__U128)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__U128)(obj), nil
@@ -2812,7 +3033,7 @@ func (obj *TransactionArgument__U8Vector) Serialize(serializer serde.Serializer)
 		return err
 	}
 	serializer.SerializeVariantIndex(4)
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2838,7 +3059,7 @@ func load_TransactionArgument__U8Vector(deserializer serde.Deserializer) (Transa
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((TransactionArgument__U8Vector)(obj)), err
+		return (TransactionArgument__U8Vector)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__U8Vector)(obj), nil
@@ -2853,7 +3074,7 @@ func (obj *TransactionArgument__Bool) Serialize(serializer serde.Serializer) err
 		return err
 	}
 	serializer.SerializeVariantIndex(5)
-	if err := serializer.SerializeBool(((bool)(*obj))); err != nil {
+	if err := serializer.SerializeBool((bool)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2879,7 +3100,7 @@ func load_TransactionArgument__Bool(deserializer serde.Deserializer) (Transactio
 	if val, err := deserializer.DeserializeBool(); err == nil {
 		obj = val
 	} else {
-		return ((TransactionArgument__Bool)(obj)), err
+		return (TransactionArgument__Bool)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__Bool)(obj), nil
@@ -3875,7 +4096,7 @@ func (obj *WriteOp__Value) Serialize(serializer serde.Serializer) error {
 		return err
 	}
 	serializer.SerializeVariantIndex(1)
-	if err := serializer.SerializeBytes((([]byte)(*obj))); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -3901,7 +4122,7 @@ func load_WriteOp__Value(deserializer serde.Deserializer) (WriteOp__Value, error
 	if val, err := deserializer.DeserializeBytes(); err == nil {
 		obj = val
 	} else {
-		return ((WriteOp__Value)(obj)), err
+		return (WriteOp__Value)(obj), err
 	}
 	deserializer.DecreaseContainerDepth()
 	return (WriteOp__Value)(obj), nil
@@ -4026,6 +4247,48 @@ func serialize_array16_u8_array(value [16]uint8, serializer serde.Serializer) er
 
 func deserialize_array16_u8_array(deserializer serde.Deserializer) ([16]uint8, error) {
 	var obj [16]uint8
+	for i := range obj {
+		if val, err := deserializer.DeserializeU8(); err == nil {
+			obj[i] = val
+		} else {
+			return obj, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_array32_u8_array(value [32]uint8, serializer serde.Serializer) error {
+	for _, item := range value {
+		if err := serializer.SerializeU8(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_array32_u8_array(deserializer serde.Deserializer) ([32]uint8, error) {
+	var obj [32]uint8
+	for i := range obj {
+		if val, err := deserializer.DeserializeU8(); err == nil {
+			obj[i] = val
+		} else {
+			return obj, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_array4_u8_array(value [4]uint8, serializer serde.Serializer) error {
+	for _, item := range value {
+		if err := serializer.SerializeU8(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_array4_u8_array(deserializer serde.Deserializer) ([4]uint8, error) {
+	var obj [4]uint8
 	for i := range obj {
 		if val, err := deserializer.DeserializeU8(); err == nil {
 			obj[i] = val
@@ -4254,6 +4517,34 @@ func deserialize_vector_Module(deserializer serde.Deserializer) ([]Module, error
 	obj := make([]Module, length)
 	for i := range obj {
 		if val, err := DeserializeModule(deserializer); err == nil {
+			obj[i] = val
+		} else {
+			return nil, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_vector_TransactionArgument(value []TransactionArgument, serializer serde.Serializer) error {
+	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
+		return err
+	}
+	for _, item := range value {
+		if err := item.Serialize(serializer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_vector_TransactionArgument(deserializer serde.Deserializer) ([]TransactionArgument, error) {
+	length, err := deserializer.DeserializeLen()
+	if err != nil {
+		return nil, err
+	}
+	obj := make([]TransactionArgument, length)
+	for i := range obj {
+		if val, err := DeserializeTransactionArgument(deserializer); err == nil {
 			obj[i] = val
 		} else {
 			return nil, err

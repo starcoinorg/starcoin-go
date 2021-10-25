@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"strings"
 
-	owcrypt "github.com/blocktree/go-owcrypt"
+	"github.com/blocktree/go-owcrypt"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 
@@ -62,7 +62,7 @@ func encode_peer_to_peer_v2_script_function(currency types.TypeTag, payee types.
 			Module:   types.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
 			Function: "peer_to_peer_v2",
 			TyArgs:   []types.TypeTag{currency},
-			Args:     [][]byte{encode_address_argument(payee), encode_u128_argument(amount)},
+			Args:     []types.TransactionArgument{&types.TransactionArgument__Address{payee}, (*types.TransactionArgument__U128)(&amount)},
 		},
 	}
 }
@@ -148,16 +148,13 @@ func PublicKeyToAddress(pk [32]byte) string {
 	return fmt.Sprintf("0x%s", hex.EncodeToString(pkBytes))
 }
 
-func ToAccountAddress(addr string) (*types.AccountAddress,error) {
-	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
-	if err != nil {
-		return nil,errors.WithStack(err)
-	}
+func ToAccountAddress(addr string) types.AccountAddress {
+	accountBytes, _ := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
 
-	var addressArray types.AccountAddress//[16]byte
+	var addressArray [16]byte
 
 	copy(addressArray[:], accountBytes[:16])
-	return &addressArray,nil
+	return addressArray
 }
 
 func Verify(pk []byte, message []byte, signature []byte) bool {
@@ -168,28 +165,28 @@ func Verify(pk []byte, message []byte, signature []byte) bool {
 	return false
 }
 
-func BytesToHexString(data []byte) string{
-	return fmt.Sprintf("0x%s",hex.EncodeToString(data))
+func BytesToHexString(data []byte) string {
+	return fmt.Sprintf("0x%s", hex.EncodeToString(data))
 }
 
-func HexStringToBytes(hexString string) ([]byte,error){
-	return hex.DecodeString(strings.Replace(hexString,"0x","",1))
+func HexStringToBytes(hexString string) ([]byte, error) {
+	return hex.DecodeString(strings.Replace(hexString, "0x", "", 1))
 }
 
-func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte,error){
-	data,err := txn.BcsSerialize()
+func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte, error) {
+	data, err := txn.BcsSerialize()
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	return Hash(PrefixHash("RawUserTransaction"),data),nil
+	return Hash(PrefixHash("RawUserTransaction"), data), nil
 }
 
-func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte,error){
-	data,err := txn.BcsSerialize()
+func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte, error) {
+	data, err := txn.BcsSerialize()
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	return Hash(PrefixHash("SignedUserTransaction"),data),nil
+	return Hash(PrefixHash("SignedUserTransaction"), data), nil
 }
