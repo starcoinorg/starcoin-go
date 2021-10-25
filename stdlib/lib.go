@@ -2,8 +2,7 @@ package stdlib
 
 import (
 	"fmt"
-
-	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
+	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	diemtypes "github.com/starcoinorg/starcoin-go/types"
 )
 
@@ -12,3443 +11,662 @@ type ScriptCall interface {
 	isScriptCall()
 }
 
-// # Summary
-// Adds a zero `Currency` balance to the sending `account`. This will enable `account` to
-// send, receive, and hold `Diem::Diem<Currency>` coins. This transaction can be
-// successfully sent by any account that is allowed to hold balances
-// (e.g., VASP, Designated Dealer).
-//
-// # Technical Description
-// After the successful execution of this transaction the sending account will have a
-// `DiemAccount::Balance<Currency>` resource with zero balance published under it. Only
-// accounts that can hold balances can send this transaction, the sending account cannot
-// already have a `DiemAccount::Balance<Currency>` published under it.
-//
-// # Parameters
-// | Name       | Type      | Description                                                                                                                                         |
-// | ------     | ------    | -------------                                                                                                                                       |
-// | `Currency` | Type      | The Move type for the `Currency` being added to the sending account of the transaction. `Currency` must be an already-registered currency on-chain. |
-// | `account`  | `&signer` | The signer of the sending account of the transaction.                                                                                               |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                             | Description                                                                |
-// | ----------------            | --------------                           | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                  | The `Currency` is not a registered currency on-chain.                      |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EROLE_CANT_STORE_BALANCE` | The sending `account`'s role does not permit balances.                     |
-// | `Errors::ALREADY_PUBLISHED` | `DiemAccount::EADD_EXISTING_CURRENCY`   | A balance for `Currency` is already published under the sending `account`. |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::create_parent_vasp_account`
-// * `Script::peer_to_peer_with_metadata`
-type ScriptCall__AddCurrencyToAccount struct {
-	Currency diemtypes.TypeTag
-}
-
-func (*ScriptCall__AddCurrencyToAccount) isScriptCall() {}
-
-// # Summary
-// Stores the sending accounts ability to rotate its authentication key with a designated recovery
-// account. Both the sending and recovery accounts need to belong to the same VASP and
-// both be VASP accounts. After this transaction both the sending account and the
-// specified recovery account can rotate the sender account's authentication key.
-//
-// # Technical Description
-// Adds the `DiemAccount::KeyRotationCapability` for the sending account
-// (`to_recover_account`) to the `RecoveryAddress::RecoveryAddress` resource under
-// `recovery_address`. After this transaction has been executed successfully the account at
-// `recovery_address` and the `to_recover_account` may rotate the authentication key of
-// `to_recover_account` (the sender of this transaction).
-//
-// The sending account of this transaction (`to_recover_account`) must not have previously given away its unique key
-// rotation capability, and must be a VASP account. The account at `recovery_address`
-// must also be a VASP account belonging to the same VASP as the `to_recover_account`.
-// Additionally the account at `recovery_address` must have already initialized itself as
-// a recovery account address using the `Script::create_recovery_address` transaction script.
-//
-// The sending account's (`to_recover_account`) key rotation capability is
-// removed in this transaction and stored in the `RecoveryAddress::RecoveryAddress`
-// resource stored under the account at `recovery_address`.
-//
-// # Parameters
-// | Name                 | Type      | Description                                                                                                |
-// | ------               | ------    | -------------                                                                                              |
-// | `to_recover_account` | `&signer` | The signer reference of the sending account of this transaction.                                           |
-// | `recovery_address`   | `address` | The account address where the `to_recover_account`'s `DiemAccount::KeyRotationCapability` will be stored. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                       |
-// | ----------------           | --------------                                            | -------------                                                                                     |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `to_recover_account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.    |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`                      | `recovery_address` does not have a `RecoveryAddress` resource published under it.                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EINVALID_KEY_ROTATION_DELEGATION`       | `to_recover_account` and `recovery_address` do not belong to the same VASP.                       |
-// | `Errors::LIMIT_EXCEEDED`   | ` RecoveryAddress::EMAX_KEYS_REGISTERED`                  | `RecoveryAddress::MAX_REGISTERED_KEYS` have already been registered with this `recovery_address`. |
-//
-// # Related Scripts
-// * `Script::create_recovery_address`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptCall__AddRecoveryRotationCapability struct {
-	RecoveryAddress diemtypes.AccountAddress
-}
-
-func (*ScriptCall__AddRecoveryRotationCapability) isScriptCall() {}
-
-// # Summary
-// Adds a validator account to the validator set, and triggers a
-// reconfiguration of the system to admit the account to the validator set for the system. This
-// transaction can only be successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script adds the account at `validator_address` to the validator set.
-// This transaction emits a `DiemConfig::NewEpochEvent` event and triggers a
-// reconfiguration. Once the reconfiguration triggered by this script's
-// execution has been performed, the account at the `validator_address` is
-// considered to be a validator in the network.
-//
-// This transaction script will fail if the `validator_address` address is already in the validator set
-// or does not have a `ValidatorConfig::ValidatorConfig` resource already published under it.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer.                                    |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be added to the validator set.                                                                    |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                                                               |
-// | ----------------           | --------------                                | -------------                                                                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `dr_account`.                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                                                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                                                                         |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | The sending account is not the Diem Root account.                                                                                        |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                          | The sending account is not the Diem Root account.                                                                                        |
-// | 0                          | 0                                             | The provided `validator_name` does not match the already-recorded human name for the validator.                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EINVALID_PROSPECTIVE_VALIDATOR` | The validator to be added does not have a `ValidatorConfig::ValidatorConfig` resource published under it, or its `config` field is empty. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EALREADY_A_VALIDATOR`           | The `validator_address` account is already a registered validator.                                                                        |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`            | An invalid time value was encountered in reconfiguration. Unlikely to occur.                                                              |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__AddValidatorAndReconfigure struct {
-	SlidingNonce     uint64
-	ValidatorName    []byte
-	ValidatorAddress diemtypes.AccountAddress
-}
-
-func (*ScriptCall__AddValidatorAndReconfigure) isScriptCall() {}
-
-// # Summary
-// Burns all coins held in the preburn resource at the specified
-// preburn address and removes them from the system. The sending account must
-// be the Treasury Compliance account.
-// The account that holds the preburn resource will normally be a Designated
-// Dealer, but there are no enforced requirements that it be one.
-//
-// # Technical Description
-// This transaction permanently destroys all the coins of `Token` type
-// stored in the `Diem::Preburn<Token>` resource published under the
-// `preburn_address` account address.
-//
-// This transaction will only succeed if the sending `account` has a
-// `Diem::BurnCapability<Token>`, and a `Diem::Preburn<Token>` resource
-// exists under `preburn_address`, with a non-zero `to_burn` field. After the successful execution
-// of this transaction the `total_value` field in the
-// `Diem::CurrencyInfo<Token>` resource published under `0xA550C18` will be
-// decremented by the value of the `to_burn` field of the preburn resource
-// under `preburn_address` immediately before this transaction, and the
-// `to_burn` field of the preburn resource will have a zero value.
-//
-// ## Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<Token>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                  |
-// | ------            | ------    | -------------                                                                                                                |
-// | `Token`           | Type      | The Move type for the `Token` currency being burned. `Token` must be an already-registered currency on-chain.                |
-// | `tc_account`      | `&signer` | The signer reference of the sending account of this transaction, must have a burn capability for `Token` published under it. |
-// | `sliding_nonce`   | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                   |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                            | Description                                                                                           |
-// | ----------------              | --------------                          | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                           |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.            |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                                     |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`               | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.              |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN`                       | The account at `preburn_address` does not have a `Diem::Preburn<Token>` resource published under it. |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_EMPTY`                 | The `Diem::Preburn<Token>` resource is empty (has a value of 0).                                     |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                 | The specified `Token` is not a registered currency on-chain.                                          |
-//
-// # Related Scripts
-// * `Script::burn_txn_fees`
-// * `Script::cancel_burn`
-// * `Script::preburn`
-type ScriptCall__Burn struct {
-	Token          diemtypes.TypeTag
-	SlidingNonce   uint64
-	PreburnAddress diemtypes.AccountAddress
-}
-
-func (*ScriptCall__Burn) isScriptCall() {}
-
-// # Summary
-// Burns the transaction fees collected in the `CoinType` currency so that the
-// Diem association may reclaim the backing coins off-chain. May only be sent
-// by the Treasury Compliance account.
-//
-// # Technical Description
-// Burns the transaction fees collected in `CoinType` so that the
-// association may reclaim the backing coins. Once this transaction has executed
-// successfully all transaction fees that will have been collected in
-// `CoinType` since the last time this script was called with that specific
-// currency. Both `balance` and `preburn` fields in the
-// `TransactionFee::TransactionFee<CoinType>` resource published under the `0xB1E55ED`
-// account address will have a value of 0 after the successful execution of this script.
-//
-// ## Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<CoinType>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name         | Type      | Description                                                                                                                                         |
-// | ------       | ------    | -------------                                                                                                                                       |
-// | `CoinType`   | Type      | The Move type for the `CoinType` being added to the sending account of the transaction. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account` | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                                 |
-// | ----------------           | --------------                        | -------------                                               |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | The sending account is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `TransactionFee::ETRANSACTION_FEE`    | `CoinType` is not an accepted transaction fee currency.     |
-// | `Errors::INVALID_ARGUMENT` | `Diem::ECOIN`                        | The collected fees in `CoinType` are zero.                  |
-//
-// # Related Scripts
-// * `Script::burn`
-// * `Script::cancel_burn`
-type ScriptCall__BurnTxnFees struct {
-	CoinType diemtypes.TypeTag
-}
-
-func (*ScriptCall__BurnTxnFees) isScriptCall() {}
-
-// # Summary
-// Cancels and returns all coins held in the preburn area under
-// `preburn_address` and returns the funds to the `preburn_address`'s balance.
-// Can only be successfully sent by an account with Treasury Compliance role.
-//
-// # Technical Description
-// Cancels and returns all coins held in the `Diem::Preburn<Token>` resource under the `preburn_address` and
-// return the funds to the `preburn_address` account's `DiemAccount::Balance<Token>`.
-// The transaction must be sent by an `account` with a `Diem::BurnCapability<Token>`
-// resource published under it. The account at `preburn_address` must have a
-// `Diem::Preburn<Token>` resource published under it, and its value must be nonzero. The transaction removes
-// the entire balance held in the `Diem::Preburn<Token>` resource, and returns it back to the account's
-// `DiemAccount::Balance<Token>` under `preburn_address`. Due to this, the account at
-// `preburn_address` must already have a balance in the `Token` currency published
-// before this script is called otherwise the transaction will fail.
-//
-// ## Events
-// The successful execution of this transaction will emit:
-// * A `Diem::CancelBurnEvent` on the event handle held in the `Diem::CurrencyInfo<Token>`
-// resource's `burn_events` published under `0xA550C18`.
-// * A `DiemAccount::ReceivedPaymentEvent` on the `preburn_address`'s
-// `DiemAccount::DiemAccount` `received_events` event handle with both the `payer` and `payee`
-// being `preburn_address`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                          |
-// | ------            | ------    | -------------                                                                                                                        |
-// | `Token`           | Type      | The Move type for the `Token` currenty that burning is being cancelled for. `Token` must be an already-registered currency on-chain. |
-// | `account`         | `&signer` | The signer reference of the sending account of this transaction, must have a burn capability for `Token` published under it.         |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                     | Description                                                                                           |
-// | ----------------              | --------------                                   | -------------                                                                                         |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                        | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.              |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN`                                | The account at `preburn_address` does not have a `Diem::Preburn<Token>` resource published under it. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                          | The specified `Token` is not a registered currency on-chain.                                          |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`            | The value held in the preburn resource was zero.                                                      |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE` | The account at `preburn_address` doesn't have a balance resource for `Token`.                         |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`          | The depositing of the funds held in the prebun area would exceed the `account`'s account limits.      |
-// | `Errors::INVALID_STATE`       | `DualAttestation::EPAYEE_COMPLIANCE_KEY_NOT_SET` | The `account` does not have a compliance key set on it but dual attestion checking was performed.     |
-//
-// # Related Scripts
-// * `Script::burn_txn_fees`
-// * `Script::burn`
-// * `Script::preburn`
-type ScriptCall__CancelBurn struct {
-	Token          diemtypes.TypeTag
-	PreburnAddress diemtypes.AccountAddress
-}
-
-func (*ScriptCall__CancelBurn) isScriptCall() {}
-
-// # Summary
-// Creates a Child VASP account with its parent being the sending account of the transaction.
-// The sender of the transaction must be a Parent VASP account.
-//
-// # Technical Description
-// Creates a `ChildVASP` account for the sender `parent_vasp` at `child_address` with a balance of
-// `child_initial_balance` in `CoinType` and an initial authentication key of
-// `auth_key_prefix | child_address`.
-//
-// If `add_all_currencies` is true, the child address will have a zero balance in all available
-// currencies in the system.
-//
-// The new account will be a child account of the transaction sender, which must be a
-// Parent VASP account. The child account will be recorded against the limit of
-// child accounts of the creating Parent VASP account.
-//
-// ## Events
-// Successful execution with a `child_initial_balance` greater than zero will emit:
-// * A `DiemAccount::SentPaymentEvent` with the `payer` field being the Parent VASP's address,
-// and payee field being `child_address`. This is emitted on the Parent VASP's
-// `DiemAccount::DiemAccount` `sent_events` handle.
-// * A `DiemAccount::ReceivedPaymentEvent` with the  `payer` field being the Parent VASP's address,
-// and payee field being `child_address`. This is emitted on the new Child VASPS's
-// `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                    | Type         | Description                                                                                                                                 |
-// | ------                  | ------       | -------------                                                                                                                               |
-// | `CoinType`              | Type         | The Move type for the `CoinType` that the child account should be created with. `CoinType` must be an already-registered currency on-chain. |
-// | `parent_vasp`           | `&signer`    | The signer reference of the sending account. Must be a Parent VASP account.                                                                 |
-// | `child_address`         | `address`    | Address of the to-be-created Child VASP account.                                                                                            |
-// | `auth_key_prefix`       | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                    |
-// | `add_all_currencies`    | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                  |
-// | `child_initial_balance` | `u64`        | The initial balance in `CoinType` to give the child account when it's created.                                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                             | Description                                                                              |
-// | ----------------            | --------------                                           | -------------                                                                            |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`            | The `auth_key_prefix` was not of length 32.                                              |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`                                    | The sending account wasn't a Parent VASP account.                                        |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                                        | The `child_address` address is already taken.                                            |
-// | `Errors::LIMIT_EXCEEDED`    | `VASP::ETOO_MANY_CHILDREN`                               | The sending account has reached the maximum number of allowed child accounts.            |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                                  | The `CoinType` is not a registered currency on-chain.                                    |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for the sending account has already been extracted.            |
-// | `Errors::NOT_PUBLISHED`     | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | The sending account doesn't have a balance in `CoinType`.                                |
-// | `Errors::LIMIT_EXCEEDED`    | `DiemAccount::EINSUFFICIENT_BALANCE`                    | The sending account doesn't have at least `child_initial_balance` of `CoinType` balance. |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::ECANNOT_CREATE_AT_VM_RESERVED`            | The `child_address` is the reserved address 0x0.                                         |
-//
-// # Related Scripts
-// * `Script::create_parent_vasp_account`
-// * `Script::add_currency_to_account`
-// * `Script::rotate_authentication_key`
-// * `Script::add_recovery_rotation_capability`
-// * `Script::create_recovery_address`
-type ScriptCall__CreateChildVaspAccount struct {
-	CoinType            diemtypes.TypeTag
-	ChildAddress        diemtypes.AccountAddress
-	AuthKeyPrefix       []byte
-	AddAllCurrencies    bool
-	ChildInitialBalance uint64
-}
-
-func (*ScriptCall__CreateChildVaspAccount) isScriptCall() {}
-
-// # Summary
-// Creates a Designated Dealer account with the provided information, and initializes it with
-// default mint tiers. The transaction can only be sent by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Designated Dealer role at `addr` with authentication key
-// `auth_key_prefix` | `addr` and a 0 balance of type `Currency`. If `add_all_currencies` is true,
-// 0 balances for all available currencies in the system will also be added. This can only be
-// invoked by an account with the TreasuryCompliance role.
-//
-// At the time of creation the account is also initialized with default mint tiers of (500_000,
-// 5000_000, 50_000_000, 500_000_000), and preburn areas for each currency that is added to the
-// account.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                                         |
-// | ------               | ------       | -------------                                                                                                                                       |
-// | `Currency`           | Type         | The Move type for the `Currency` that the Designated Dealer should be initialized with. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`         | `&signer`    | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                           |
-// | `sliding_nonce`      | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                          |
-// | `addr`               | `address`    | Address of the to-be-created Designated Dealer account.                                                                                             |
-// | `auth_key_prefix`    | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                            |
-// | `human_name`         | `vector<u8>` | ASCII-encoded human name for the Designated Dealer.                                                                                                 |
-// | `add_all_currencies` | `bool`       | Whether to publish preburn, balance, and tier info resources for all known (SCS) currencies or just `Currency` when the account is created.         |
-//
-
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `Currency` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `addr` address is already taken.                                                       |
-//
-// # Related Scripts
-// * `Script::tiered_mint`
-// * `Script::peer_to_peer_with_metadata`
-// * `Script::rotate_dual_attestation_info`
-type ScriptCall__CreateDesignatedDealer struct {
-	Currency         diemtypes.TypeTag
-	SlidingNonce     uint64
-	Addr             diemtypes.AccountAddress
-	AuthKeyPrefix    []byte
-	HumanName        []byte
-	AddAllCurrencies bool
-}
-
-func (*ScriptCall__CreateDesignatedDealer) isScriptCall() {}
-
-// # Summary
-// Creates a Parent VASP account with the specified human name. Must be called by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Parent VASP role at `address` with authentication key
-// `auth_key_prefix` | `new_account_address` and a 0 balance of type `CoinType`. If
-// `add_all_currencies` is true, 0 balances for all available currencies in the system will
-// also be added. This can only be invoked by an TreasuryCompliance account.
-// `sliding_nonce` is a unique nonce for operation, see `SlidingNonce` for details.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                                                                                    |
-// | ------                | ------       | -------------                                                                                                                                                  |
-// | `CoinType`            | Type         | The Move type for the `CoinType` currency that the Parent VASP account should be initialized with. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                                      |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                                     |
-// | `new_account_address` | `address`    | Address of the to-be-created Parent VASP account.                                                                                                              |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                                       |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the Parent VASP.                                                                                                                  |
-// | `add_all_currencies`  | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `CoinType` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::add_currency_to_account`
-// * `Script::rotate_authentication_key`
-// * `Script::add_recovery_rotation_capability`
-// * `Script::create_recovery_address`
-// * `Script::rotate_dual_attestation_info`
-type ScriptCall__CreateParentVaspAccount struct {
-	CoinType          diemtypes.TypeTag
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
-	AddAllCurrencies  bool
-}
-
-func (*ScriptCall__CreateParentVaspAccount) isScriptCall() {}
-
-// # Summary
-// Initializes the sending account as a recovery address that may be used by
-// the VASP that it belongs to. The sending account must be a VASP account.
-// Multiple recovery addresses can exist for a single VASP, but accounts in
-// each must be disjoint.
-//
-// # Technical Description
-// Publishes a `RecoveryAddress::RecoveryAddress` resource under `account`. It then
-// extracts the `DiemAccount::KeyRotationCapability` for `account` and adds
-// it to the resource. After the successful execution of this transaction
-// other accounts may add their key rotation to this resource so that `account`
-// may be used as a recovery account for those accounts.
-//
-// # Parameters
-// | Name      | Type      | Description                                           |
-// | ------    | ------    | -------------                                         |
-// | `account` | `&signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                   |
-// | ----------------            | --------------                                             | -------------                                                                                 |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.          |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::ENOT_A_VASP`                             | `account` is not a VASP account.                                                              |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::EKEY_ROTATION_DEPENDENCY_CYCLE`          | A key rotation recovery cycle would be created by adding `account`'s key rotation capability. |
-// | `Errors::ALREADY_PUBLISHED` | `RecoveryAddress::ERECOVERY_ADDRESS`                       | A `RecoveryAddress::RecoveryAddress` resource has already been published under `account`.     |
-//
-// # Related Scripts
-// * `Script::add_recovery_rotation_capability`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptCall__CreateRecoveryAddress struct {
-}
-
-func (*ScriptCall__CreateRecoveryAddress) isScriptCall() {}
-
-// # Summary
-// Creates a Validator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorConfig::ValidatorConfig` resource with empty `config`, and
-// `operator_account` fields. The `human_name` field of the
-// `ValidatorConfig::ValidatorConfig` is set to the passed in `human_name`.
-// This script does not add the validator to the validator set or the system,
-// but only creates the account.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                     |
-// | ------                | ------       | -------------                                                                                   |
-// | `dr_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer. |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                                 |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.        |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::add_validator_and_reconfigure`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__CreateValidatorAccount struct {
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
-}
-
-func (*ScriptCall__CreateValidatorAccount) isScriptCall() {}
-
-// # Summary
-// Creates a Validator Operator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator Operator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorOperatorConfig::ValidatorOperatorConfig` resource with the specified `human_name`.
-// This script does not assign the validator operator to any validator accounts but only creates the account.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                     |
-// | ------                | ------       | -------------                                                                                   |
-// | `dr_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer. |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                                 |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.        |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__CreateValidatorOperatorAccount struct {
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
-}
-
-func (*ScriptCall__CreateValidatorOperatorAccount) isScriptCall() {}
-
-// # Summary
-// Freezes the account at `address`. The sending account of this transaction
-// must be the Treasury Compliance account. The account being frozen cannot be
-// the Diem Root or Treasury Compliance account. After the successful
-// execution of this transaction no transactions may be sent from the frozen
-// account, and the frozen account may not send or receive coins.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `true` and emits a
-// `AccountFreezing::FreezeAccountEvent`. The transaction sender must be the
-// Treasury Compliance account, but the account at `to_freeze_account` must
-// not be either `0xA550C18` (the Diem Root address), or `0xB1E55ED` (the
-// Treasury Compliance address). Note that this is a per-account property
-// e.g., freezing a Parent VASP will not effect the status any of its child
-// accounts and vice versa.
-//
-
-// ## Events
-// Successful execution of this transaction will emit a `AccountFreezing::FreezeAccountEvent` on
-// the `freeze_event_handle` held in the `AccountFreezing::FreezeEventsHolder` resource published
-// under `0xA550C18` with the `frozen_address` being the `to_freeze_account`.
-//
-// # Parameters
-// | Name                | Type      | Description                                                                                               |
-// | ------              | ------    | -------------                                                                                             |
-// | `tc_account`        | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`     | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `to_freeze_account` | `address` | The account address to be frozen.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                |
-// | ----------------           | --------------                               | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`        | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`                | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_TC`         | `to_freeze_account` was the Treasury Compliance account (`0xB1E55ED`).                     |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_DIEM_ROOT` | `to_freeze_account` was the Diem Root account (`0xA550C18`).                              |
-//
-// # Related Scripts
-// * `Script::unfreeze_account`
-type ScriptCall__FreezeAccount struct {
-	SlidingNonce    uint64
-	ToFreezeAccount diemtypes.AccountAddress
-}
-
-func (*ScriptCall__FreezeAccount) isScriptCall() {}
-
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata` and an (optional) `metadata_signature` on the message
-// `metadata` | `Signer::address_of(payer)` | `amount` | `DualAttestation::DOMAIN_SEPARATOR`.
-// The `metadata` and `metadata_signature` parameters are only required if `amount` >=
-// `DualAttestation::get_cur_microdiem_limit` XDX and `payer` and `payee` are distinct VASPs.
-// However, a transaction sender can opt in to dual attestation even when it is not required
-// (e.g., a DesignatedDealer -> VASP payment) by providing a non-empty `metadata_signature`.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// ## Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `&signer`    | The signer reference of the sending account that coins are being transferred from.                                           |
-// | `payee`              | `address`    | The address of the account the coins are being transferred to.                                                               |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-// | `metadata_signature` | `vector<u8>` | Optional signature over `metadata` and payment information. See                                                              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`      | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`            | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`            | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`            | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE` | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EMALFORMED_METADATA_SIGNATURE` | `metadata_signature` is not 64 bytes.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_METADATA_SIGNATURE`   | `metadata_signature` does not verify on the against the `payee'`s `DualAttestation::Credential` `compliance_public_key` public key. |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`       | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`          | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::create_parent_vasp_account`
-// * `Script::add_currency_to_account`
-type ScriptCall__PeerToPeerWithMetadata struct {
-	Currency          diemtypes.TypeTag
-	Payee             diemtypes.AccountAddress
-	Amount            uint64
-	Metadata          []byte
-	MetadataSignature []byte
-}
-
-func (*ScriptCall__PeerToPeerWithMetadata) isScriptCall() {}
-
-// # Summary
-// Moves a specified number of coins in a given currency from the account's
-// balance to its preburn area after which the coins may be burned. This
-// transaction may be sent by any account that holds a balance and preburn area
-// in the specified currency.
-//
-// # Technical Description
-// Moves the specified `amount` of coins in `Token` currency from the sending `account`'s
-// `DiemAccount::Balance<Token>` to the `Diem::Preburn<Token>` published under the same
-// `account`. `account` must have both of these resources published under it at the start of this
-// transaction in order for it to execute successfully.
-//
-// ## Events
-// Successful execution of this script emits two events:
-// * `DiemAccount::SentPaymentEvent ` on `account`'s `DiemAccount::DiemAccount` `sent_events`
-// handle with the `payee` and `payer` fields being `account`'s address; and
-// * A `Diem::PreburnEvent` with `Token`'s currency code on the
-// `Diem::CurrencyInfo<Token`'s `preburn_events` handle for `Token` and with
-// `preburn_address` set to `account`'s address.
-//
-// # Parameters
-// | Name      | Type      | Description                                                                                                                      |
-// | ------    | ------    | -------------                                                                                                                    |
-// | `Token`   | Type      | The Move type for the `Token` currency being moved to the preburn area. `Token` must be an already-registered currency on-chain. |
-// | `account` | `&signer` | The signer reference of the sending account.                                                                                     |
-// | `amount`  | `u64`     | The amount in `Token` to be moved to the preburn area.                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category           | Error Reason                                             | Description                                                                             |
-// | ----------------         | --------------                                           | -------------                                                                           |
-// | `Errors::NOT_PUBLISHED`  | `Diem::ECURRENCY_INFO`                                  | The `Token` is not a registered currency on-chain.                                      |
-// | `Errors::INVALID_STATE`  | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for `account` has already been extracted.                     |
-// | `Errors::LIMIT_EXCEEDED` | `DiemAccount::EINSUFFICIENT_BALANCE`                    | `amount` is greater than `payer`'s balance in `Token`.                                  |
-// | `Errors::NOT_PUBLISHED`  | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | `account` doesn't hold a balance in `Token`.                                            |
-// | `Errors::NOT_PUBLISHED`  | `Diem::EPREBURN`                                        | `account` doesn't have a `Diem::Preburn<Token>` resource published under it.           |
-// | `Errors::INVALID_STATE`  | `Diem::EPREBURN_OCCUPIED`                               | The `value` field in the `Diem::Preburn<Token>` resource under the sender is non-zero. |
-// | `Errors::NOT_PUBLISHED`  | `Roles::EROLE_ID`                                        | The `account` did not have a role assigned to it.                                       |
-// | `Errors::REQUIRES_ROLE`  | `Roles::EDESIGNATED_DEALER`                              | The `account` did not have the role of DesignatedDealer.                                |
-//
-// # Related Scripts
-// * `Script::cancel_burn`
-// * `Script::burn`
-// * `Script::burn_txn_fees`
-type ScriptCall__Preburn struct {
-	Token  diemtypes.TypeTag
-	Amount uint64
-}
-
-func (*ScriptCall__Preburn) isScriptCall() {}
-
-// # Summary
-// Rotates the authentication key of the sending account to the
-// newly-specified public key and publishes a new shared authentication key
-// under the sender's account. Any account can send this transaction.
-//
-// # Technical Description
-// Rotates the authentication key of the sending account to `public_key`,
-// and publishes a `SharedEd25519PublicKey::SharedEd25519PublicKey` resource
-// containing the 32-byte ed25519 `public_key` and the `DiemAccount::KeyRotationCapability` for
-// `account` under `account`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                               |
-// | ------       | ------       | -------------                                                                             |
-// | `account`    | `&signer`    | The signer reference of the sending account of the transaction.                           |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key for `account`' authentication key to be rotated to and stored. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                         |
-// | ----------------            | --------------                                             | -------------                                                                                       |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability` resource.       |
-// | `Errors::ALREADY_PUBLISHED` | `SharedEd25519PublicKey::ESHARED_KEY`                      | The `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is already published under `account`. |
-// | `Errors::INVALID_ARGUMENT`  | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY`            | `public_key` is an invalid ed25519 public key.                                                      |
-//
-// # Related Scripts
-// * `Script::rotate_shared_ed25519_public_key`
-type ScriptCall__PublishSharedEd25519PublicKey struct {
-	PublicKey []byte
-}
-
-func (*ScriptCall__PublishSharedEd25519PublicKey) isScriptCall() {}
-
-// # Summary
-// Updates a validator's configuration. This does not reconfigure the system and will not update
-// the configuration in the validator set that is seen by other validators in the network. Can
-// only be successfully sent by a Validator Operator account that is already registered with a
-// validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It does not emit a `DiemConfig::NewEpochEvent`
-// so the copy of this config held in the validator set will not be updated, and the changes are
-// only "locally" under the `validator_account` account address.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                                  |
-// | ------                        | ------       | -------------                                                                                                                |
-// | `validator_operator_account`  | `&signer`    | Signer reference of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                                    |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                                         |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                       |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__RegisterValidatorConfig struct {
-	ValidatorAccount          diemtypes.AccountAddress
-	ConsensusPubkey           []byte
-	ValidatorNetworkAddresses []byte
-	FullnodeNetworkAddresses  []byte
-}
-
-func (*ScriptCall__RegisterValidatorConfig) isScriptCall() {}
-
-// # Summary
-// This script removes a validator account from the validator set, and triggers a reconfiguration
-// of the system to remove the validator from the system. This transaction can only be
-// successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script removes the account at `validator_address` from the validator set. This transaction
-// emits a `DiemConfig::NewEpochEvent` event. Once the reconfiguration triggered by this event
-// has been performed, the account at `validator_address` is no longer considered to be a
-// validator in the network. This transaction will fail if the validator at `validator_address`
-// is not in the validator set.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer.                                    |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be removed from the validator set.                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                     |
-// | ----------------           | --------------                          | -------------                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                                  |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.      |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | The sending account is not the Diem Root account or Treasury Compliance account                |
-// | 0                          | 0                                       | The provided `validator_name` does not match the already-recorded human name for the validator. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::ENOT_AN_ACTIVE_VALIDATOR` | The validator to be removed is not in the validator set.                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                              |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                              |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`      | An invalid time value was encountered in reconfiguration. Unlikely to occur.                    |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__RemoveValidatorAndReconfigure struct {
-	SlidingNonce     uint64
-	ValidatorName    []byte
-	ValidatorAddress diemtypes.AccountAddress
-}
-
-func (*ScriptCall__RemoveValidatorAndReconfigure) isScriptCall() {}
-
-// # Summary
-// Rotates the transaction sender's authentication key to the supplied new authentication key. May
-// be sent by any account.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                 |
-// | ------    | ------       | -------------                                               |
-// | `account` | `&signer`    | Signer reference of the sending account of the transaction. |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for `account`.            |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                              |
-// | ----------------           | --------------                                             | -------------                                                                            |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.     |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                         |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptCall__RotateAuthenticationKey struct {
-	NewKey []byte
-}
-
-func (*ScriptCall__RotateAuthenticationKey) isScriptCall() {}
-
-// # Summary
-// Rotates the sender's authentication key to the supplied new authentication key. May be sent by
-// any account that has a sliding nonce resource published under it (usually this is Treasury
-// Compliance or Diem Root accounts).
-//
-// # Technical Description
-// Rotates the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                |
-// | ------          | ------       | -------------                                                              |
-// | `account`       | `&signer`    | Signer reference of the sending account of the transaction.                |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `new_key`       | `vector<u8>` | New ed25519 public key to be used for `account`.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                           |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptCall__RotateAuthenticationKeyWithNonce struct {
-	SlidingNonce uint64
-	NewKey       []byte
-}
-
-func (*ScriptCall__RotateAuthenticationKeyWithNonce) isScriptCall() {}
-
-// # Summary
-// Rotates the specified account's authentication key to the supplied new authentication key. May
-// only be sent by the Diem Root account as a write set transaction.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                                                  |
-// | ------          | ------       | -------------                                                                                                |
-// | `dr_account`    | `&signer`    | The signer reference of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`       | `&signer`    | Signer reference of account specified in the `execute_as` field of the write set transaction.                |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.                    |
-// | `new_key`       | `vector<u8>` | New ed25519 public key to be used for `account`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `dr_account`.                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` in `dr_account` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` in` dr_account` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.                       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                                           |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptCall__RotateAuthenticationKeyWithNonceAdmin struct {
-	SlidingNonce uint64
-	NewKey       []byte
-}
-
-func (*ScriptCall__RotateAuthenticationKeyWithNonceAdmin) isScriptCall() {}
-
-// # Summary
-// Rotates the authentication key of a specified account that is part of a recovery address to a
-// new authentication key. Only used for accounts that are part of a recovery address (see
-// `Script::add_recovery_rotation_capability` for account restrictions).
-//
-// # Technical Description
-// Rotates the authentication key of the `to_recover` account to `new_key` using the
-// `DiemAccount::KeyRotationCapability` stored in the `RecoveryAddress::RecoveryAddress` resource
-// published under `recovery_address`. This transaction can be sent either by the `to_recover`
-// account, or by the account where the `RecoveryAddress::RecoveryAddress` resource is published
-// that contains `to_recover`'s `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                                    |
-// | ------             | ------       | -------------                                                                                                                  |
-// | `account`          | `&signer`    | Signer reference of the sending account of the transaction.                                                                    |
-// | `recovery_address` | `address`    | Address where `RecoveryAddress::RecoveryAddress` that holds `to_recover`'s `DiemAccount::KeyRotationCapability` is published. |
-// | `to_recover`       | `address`    | The address of the account whose authentication key will be updated.                                                           |
-// | `new_key`          | `vector<u8>` | New ed25519 public key to be used for the account at the `to_recover` address.                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                                                                          |
-// | ----------------           | --------------                                | -------------                                                                                                                                        |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`          | `recovery_address` does not have a `RecoveryAddress::RecoveryAddress` resource published under it.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::ECANNOT_ROTATE_KEY`         | The address of `account` is not `recovery_address` or `to_recover`.                                                                                  |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EACCOUNT_NOT_RECOVERABLE`   | `to_recover`'s `DiemAccount::KeyRotationCapability`  is not in the `RecoveryAddress::RecoveryAddress`  resource published under `recovery_address`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY` | `new_key` was an invalid length.                                                                                                                     |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-type ScriptCall__RotateAuthenticationKeyWithRecoveryAddress struct {
-	RecoveryAddress diemtypes.AccountAddress
-	ToRecover       diemtypes.AccountAddress
-	NewKey          []byte
-}
-
-func (*ScriptCall__RotateAuthenticationKeyWithRecoveryAddress) isScriptCall() {}
-
-// # Summary
-// Updates the url used for off-chain communication, and the public key used to verify dual
-// attestation on-chain. Transaction can be sent by any account that has dual attestation
-// information published under it. In practice the only such accounts are Designated Dealers and
-// Parent VASPs.
-//
-// # Technical Description
-// Updates the `base_url` and `compliance_public_key` fields of the `DualAttestation::Credential`
-// resource published under `account`. The `new_key` must be a valid ed25519 public key.
-//
-// ## Events
-// Successful execution of this transaction emits two events:
-// * A `DualAttestation::ComplianceKeyRotationEvent` containing the new compliance public key, and
-// the blockchain time at which the key was updated emitted on the `DualAttestation::Credential`
-// `compliance_key_rotation_events` handle published under `account`; and
-// * A `DualAttestation::BaseUrlRotationEvent` containing the new base url to be used for
-// off-chain communication, and the blockchain time at which the url was updated emitted on the
-// `DualAttestation::Credential` `base_url_rotation_events` handle published under `account`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                               |
-// | ------    | ------       | -------------                                                             |
-// | `account` | `&signer`    | Signer reference of the sending account of the transaction.               |
-// | `new_url` | `vector<u8>` | ASCII-encoded url to be used for off-chain communication with `account`.  |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for on-chain dual attestation checking. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                           | Description                                                                |
-// | ----------------           | --------------                         | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`    | `DualAttestation::ECREDENTIAL`         | A `DualAttestation::Credential` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_PUBLIC_KEY` | `new_key` is not a valid ed25519 public key.                               |
-//
-// # Related Scripts
-// * `Script::create_parent_vasp_account`
-// * `Script::create_designated_dealer`
-// * `Script::rotate_dual_attestation_info`
-type ScriptCall__RotateDualAttestationInfo struct {
-	NewUrl []byte
-	NewKey []byte
-}
-
-func (*ScriptCall__RotateDualAttestationInfo) isScriptCall() {}
-
-// # Summary
-// Rotates the authentication key in a `SharedEd25519PublicKey`. This transaction can be sent by
-// any account that has previously published a shared ed25519 public key using
-// `Script::publish_shared_ed25519_public_key`.
-//
-// # Technical Description
-// This first rotates the public key stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` resource to `public_key`, after which it
-// rotates the authentication key using the capability stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` to a new value derived from `public_key`
-//
-// # Parameters
-// | Name         | Type         | Description                                                     |
-// | ------       | ------       | -------------                                                   |
-// | `account`    | `&signer`    | The signer reference of the sending account of the transaction. |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key.                                     |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                    | Description                                                                                   |
-// | ----------------           | --------------                                  | -------------                                                                                 |
-// | `Errors::NOT_PUBLISHED`    | `SharedEd25519PublicKey::ESHARED_KEY`           | A `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY` | `public_key` is an invalid ed25519 public key.                                                |
-//
-// # Related Scripts
-// * `Script::publish_shared_ed25519_public_key`
-type ScriptCall__RotateSharedEd25519PublicKey struct {
-	PublicKey []byte
-}
-
-func (*ScriptCall__RotateSharedEd25519PublicKey) isScriptCall() {}
-
-// # Summary
-// Updates a validator's configuration, and triggers a reconfiguration of the system to update the
-// validator set with this new validator configuration.  Can only be successfully sent by a
-// Validator Operator account that is already registered with a validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It then emits a `DiemConfig::NewEpochEvent` to
-// trigger a reconfiguration of the system.  This reconfiguration will update the validator set
-// on-chain with the updated `ValidatorConfig::ValidatorConfig`.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                                  |
-// | ------                        | ------       | -------------                                                                                                                |
-// | `validator_operator_account`  | `&signer`    | Signer reference of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                                    |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                                         |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                       |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR_OPERATOR`                   | `validator_operator_account` does not have a Validator Operator role.                                 |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`             | An invalid time value was encountered in reconfiguration. Unlikely to occur.                          |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::register_validator_config`
-type ScriptCall__SetValidatorConfigAndReconfigure struct {
-	ValidatorAccount          diemtypes.AccountAddress
-	ConsensusPubkey           []byte
-	ValidatorNetworkAddresses []byte
-	FullnodeNetworkAddresses  []byte
-}
-
-func (*ScriptCall__SetValidatorConfigAndReconfigure) isScriptCall() {}
-
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by an account with
-// Validator role.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the sending validator account. The account at `operator_account` address must have
-// a Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig`
-// resource published under it. The sending `account` must be a Validator and have a
-// `ValidatorConfig::ValidatorConfig` resource published under it. This script does not emit a
-// `DiemConfig::NewEpochEvent` and no reconfiguration of the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                  |
-// | ------             | ------       | -------------                                                                                |
-// | `account`          | `&signer`    | The signer reference of the sending account of the transaction.                              |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__SetValidatorOperator struct {
-	OperatorName    []byte
-	OperatorAccount diemtypes.AccountAddress
-}
-
-func (*ScriptCall__SetValidatorOperator) isScriptCall() {}
-
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by the Diem Root
-// account as a write set transaction.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the validator `account`. The account at `operator_account` address must have a
-// Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource
-// published under it. The account represented by the `account` signer must be a Validator and
-// have a `ValidatorConfig::ValidatorConfig` resource published under it. No reconfiguration of
-// the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                  |
-// | ------             | ------       | -------------                                                                                                |
-// | `dr_account`       | `&signer`    | The signer reference of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`          | `&signer`    | Signer reference of account specified in the `execute_as` field of the write set transaction.                |
-// | `sliding_nonce`    | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.                    |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator.                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | A `SlidingNonce` resource is not published under `dr_account`.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                        | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                        | The `sliding_nonce` in `dr_account` is too far in the future.                                                                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`               | The `sliding_nonce` in` dr_account` has been previously recorded.                                                                                            |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | The sending account is not the Diem Root account or Treasury Compliance account                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_config_and_reconfigure`
-type ScriptCall__SetValidatorOperatorWithNonceAdmin struct {
-	SlidingNonce    uint64
-	OperatorName    []byte
-	OperatorAccount diemtypes.AccountAddress
-}
-
-func (*ScriptCall__SetValidatorOperatorWithNonceAdmin) isScriptCall() {}
-
-// # Summary
-// Mints a specified number of coins in a currency to a Designated Dealer. The sending account
-// must be the Treasury Compliance account, and coins can only be minted to a Designated Dealer
-// account.
-//
-// # Technical Description
-// Mints `mint_amount` of coins in the `CoinType` currency to Designated Dealer account at
-// `designated_dealer_address`. The `tier_index` parameter specifies which tier should be used to
-// check verify the off-chain approval policy, and is based in part on the on-chain tier values
-// for the specific Designated Dealer, and the number of `CoinType` coins that have been minted to
-// the dealer over the past 24 hours. Every Designated Dealer has 4 tiers for each currency that
-// they support. The sending `tc_account` must be the Treasury Compliance account, and the
-// receiver an authorized Designated Dealer account.
-//
-// ## Events
-// Successful execution of the transaction will emit two events:
-// * A `Diem::MintEvent` with the amount and currency code minted is emitted on the
-// `mint_event_handle` in the stored `Diem::CurrencyInfo<CoinType>` resource stored under
-// `0xA550C18`; and
-// * A `DesignatedDealer::ReceivedMintEvent` with the amount, currency code, and Designated
-// Dealer's address is emitted on the `mint_event_handle` in the stored `DesignatedDealer::Dealer`
-// resource published under the `designated_dealer_address`.
-//
-// # Parameters
-// | Name                        | Type      | Description                                                                                                |
-// | ------                      | ------    | -------------                                                                                              |
-// | `CoinType`                  | Type      | The Move type for the `CoinType` being minted. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`                | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.  |
-// | `sliding_nonce`             | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                 |
-// | `designated_dealer_address` | `address` | The address of the Designated Dealer account being minted to.                                              |
-// | `mint_amount`               | `u64`     | The number of coins to be minted.                                                                          |
-// | `tier_index`                | `u64`     | The mint tier index to use for the Designated Dealer account.                                              |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                 | Description                                                                                                                  |
-// | ----------------              | --------------                               | -------------                                                                                                                |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                                                               |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                   |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                            |
-// | `Errors::REQUIRES_ADDRESS`    | `CoreAddresses::ETREASURY_COMPLIANCE`        | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::REQUIRES_ROLE`       | `Roles::ETREASURY_COMPLIANCE`                | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_MINT_AMOUNT`     | `mint_amount` is zero.                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `DesignatedDealer::EDEALER`                  | `DesignatedDealer::Dealer` or `DesignatedDealer::TierInfo<CoinType>` resource does not exist at `designated_dealer_address`. |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_TIER_INDEX`      | The `tier_index` is out of bounds.                                                                                           |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_AMOUNT_FOR_TIER` | `mint_amount` exceeds the maximum allowed amount for `tier_index`.                                                           |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EMINT_CAPABILITY`                    | `tc_account` does not have a `Diem::MintCapability<CoinType>` resource published under it.                                  |
-// | `Errors::INVALID_STATE`       | `Diem::EMINTING_NOT_ALLOWED`                | Minting is not currently allowed for `CoinType` coins.                                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`      | The depositing of the funds would exceed the `account`'s account limits.                                                     |
-//
-// # Related Scripts
-// * `Script::create_designated_dealer`
-// * `Script::peer_to_peer_with_metadata`
-// * `Script::rotate_dual_attestation_info`
-type ScriptCall__TieredMint struct {
-	CoinType                diemtypes.TypeTag
-	SlidingNonce            uint64
-	DesignatedDealerAddress diemtypes.AccountAddress
-	MintAmount              uint64
-	TierIndex               uint64
-}
-
-func (*ScriptCall__TieredMint) isScriptCall() {}
-
-// # Summary
-// Unfreezes the account at `address`. The sending account of this transaction must be the
-// Treasury Compliance account. After the successful execution of this transaction transactions
-// may be sent from the previously frozen account, and coins may be sent and received.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `false` and emits a
-// `AccountFreezing::UnFreezeAccountEvent`. The transaction sender must be the Treasury Compliance
-// account. Note that this is a per-account property so unfreezing a Parent VASP will not effect
-// the status any of its child accounts and vice versa.
-//
-// ## Events
-// Successful execution of this script will emit a `AccountFreezing::UnFreezeAccountEvent` with
-// the `unfrozen_address` set the `to_unfreeze_account`'s address.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                               |
-// | ------                | ------    | -------------                                                                                             |
-// | `tc_account`          | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `to_unfreeze_account` | `address` | The account address to be frozen.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-//
-// # Related Scripts
-// * `Script::freeze_account`
-type ScriptCall__UnfreezeAccount struct {
-	SlidingNonce      uint64
-	ToUnfreezeAccount diemtypes.AccountAddress
-}
-
-func (*ScriptCall__UnfreezeAccount) isScriptCall() {}
-
-// # Summary
-// Updates the Diem major version that is stored on-chain and is used by the VM.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemVersion` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system. The `major` version that is passed in must be strictly greater
-// than the current major version held on-chain. The VM reads this information and can use it to
-// preserve backwards compatibility with previous major versions of the VM.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                |
-// | ------          | ------    | -------------                                                              |
-// | `account`       | `&signer` | Signer reference of the sending account. Must be the Diem Root account.   |
-// | `sliding_nonce` | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `major`         | `u64`     | The `major` version of the VM to be used from this transaction on.         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | `account` is not the Diem Root account.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `DiemVersion::EINVALID_MAJOR_VERSION_NUMBER` | `major` is less-than or equal to the current major version stored on-chain.                |
-type ScriptCall__UpdateDiemVersion struct {
-	SlidingNonce uint64
-	Major        uint64
-}
-
-func (*ScriptCall__UpdateDiemVersion) isScriptCall() {}
-
-// # Summary
-// Update the dual attestation limit on-chain. Defined in terms of micro-XDX.  The transaction can
-// only be sent by the Treasury Compliance account.  After this transaction all inter-VASP
-// payments over this limit must be checked for dual attestation.
-//
-// # Technical Description
-// Updates the `micro_xdx_limit` field of the `DualAttestation::Limit` resource published under
-// `0xA550C18`. The amount is set in micro-XDX.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                               |
-// | ------                | ------    | -------------                                                                                             |
-// | `tc_account`          | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `new_micro_xdx_limit` | `u64`     | The new dual attestation limit to be used on-chain.                                                       |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-//
-// # Related Scripts
-// * `Script::update_exchange_rate`
-// * `Script::update_minting_ability`
-type ScriptCall__UpdateDualAttestationLimit struct {
-	SlidingNonce     uint64
-	NewMicroXdxLimit uint64
-}
-
-func (*ScriptCall__UpdateDualAttestationLimit) isScriptCall() {}
-
-// # Summary
-// Update the rough on-chain exchange rate between a specified currency and XDX (as a conversion
-// to micro-XDX). The transaction can only be sent by the Treasury Compliance account. After this
-// transaction the updated exchange rate will be used for normalization of gas prices, and for
-// dual attestation checking.
-//
-// # Technical Description
-// Updates the on-chain exchange rate from the given `Currency` to micro-XDX.  The exchange rate
-// is given by `new_exchange_rate_numerator/new_exchange_rate_denominator`.
-//
-// # Parameters
-// | Name                            | Type      | Description                                                                                                                        |
-// | ------                          | ------    | -------------                                                                                                                      |
-// | `Currency`                      | Type      | The Move type for the `Currency` whose exchange rate is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`                    | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                          |
-// | `sliding_nonce`                 | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for the transaction.                                                          |
-// | `new_exchange_rate_numerator`   | `u64`     | The numerator for the new to micro-XDX exchange rate for `Currency`.                                                               |
-// | `new_exchange_rate_denominator` | `u64`     | The denominator for the new to micro-XDX exchange rate for `Currency`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`           | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::EDENOMINATOR`            | `new_exchange_rate_denominator` is zero.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-//
-// # Related Scripts
-// * `Script::update_dual_attestation_limit`
-// * `Script::update_minting_ability`
-type ScriptCall__UpdateExchangeRate struct {
-	Currency                   diemtypes.TypeTag
-	SlidingNonce               uint64
-	NewExchangeRateNumerator   uint64
-	NewExchangeRateDenominator uint64
-}
-
-func (*ScriptCall__UpdateExchangeRate) isScriptCall() {}
-
-// # Summary
-// Script to allow or disallow minting of new coins in a specified currency.  This transaction can
-// only be sent by the Treasury Compliance account.  Turning minting off for a currency will have
-// no effect on coins already in circulation, and coins may still be removed from the system.
-//
-// # Technical Description
-// This transaction sets the `can_mint` field of the `Diem::CurrencyInfo<Currency>` resource
-// published under `0xA550C18` to the value of `allow_minting`. Minting of coins if allowed if
-// this field is set to `true` and minting of new coins in `Currency` is disallowed otherwise.
-// This transaction needs to be sent by the Treasury Compliance account.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                                                                          |
-// | ------          | ------    | -------------                                                                                                                        |
-// | `Currency`      | Type      | The Move type for the `Currency` whose minting ability is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `account`       | `&signer` | Signer reference of the sending account. Must be the Diem Root account.                                                             |
-// | `allow_minting` | `bool`    | Whether to allow minting of new coins in `Currency`.                                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                          |
-// | ----------------           | --------------                        | -------------                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | `tc_account` is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `Diem::ECURRENCY_INFO`               | `Currency` is not a registered currency on-chain.    |
-//
-// # Related Scripts
-// * `Script::update_dual_attestation_limit`
-// * `Script::update_exchange_rate`
-type ScriptCall__UpdateMintingAbility struct {
-	Currency     diemtypes.TypeTag
-	AllowMinting bool
-}
-
-func (*ScriptCall__UpdateMintingAbility) isScriptCall() {}
-
 // Structured representation of a call into a known Move script function.
 type ScriptFunctionCall interface {
 	isScriptFunctionCall()
 }
 
-// # Summary
-// Adds a zero `Currency` balance to the sending `account`. This will enable `account` to
-// send, receive, and hold `Diem::Diem<Currency>` coins. This transaction can be
-// successfully sent by any account that is allowed to hold balances
-// (e.g., VASP, Designated Dealer).
-//
-// # Technical Description
-// After the successful execution of this transaction the sending account will have a
-// `DiemAccount::Balance<Currency>` resource with zero balance published under it. Only
-// accounts that can hold balances can send this transaction, the sending account cannot
-// already have a `DiemAccount::Balance<Currency>` published under it.
-//
-// # Parameters
-// | Name       | Type     | Description                                                                                                                                         |
-// | ------     | ------   | -------------                                                                                                                                       |
-// | `Currency` | Type     | The Move type for the `Currency` being added to the sending account of the transaction. `Currency` must be an already-registered currency on-chain. |
-// | `account`  | `signer` | The signer of the sending account of the transaction.                                                                                               |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                             | Description                                                                |
-// | ----------------            | --------------                           | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                  | The `Currency` is not a registered currency on-chain.                      |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EROLE_CANT_STORE_BALANCE` | The sending `account`'s role does not permit balances.                     |
-// | `Errors::ALREADY_PUBLISHED` | `DiemAccount::EADD_EXISTING_CURRENCY`   | A balance for `Currency` is already published under the sending `account`. |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-type ScriptFunctionCall__AddCurrencyToAccount struct {
-	Currency diemtypes.TypeTag
+// Init a  NFTGallery for accept NFT<NFTMeta, NFTBody>
+type ScriptFunctionCall__Accept struct {
+	NftMeta diemtypes.TypeTag
+	NftBody diemtypes.TypeTag
 }
 
-func (*ScriptFunctionCall__AddCurrencyToAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__Accept) isScriptFunctionCall() {}
 
-// # Summary
-// Stores the sending accounts ability to rotate its authentication key with a designated recovery
-// account. Both the sending and recovery accounts need to belong to the same VASP and
-// both be VASP accounts. After this transaction both the sending account and the
-// specified recovery account can rotate the sender account's authentication key.
-//
-// # Technical Description
-// Adds the `DiemAccount::KeyRotationCapability` for the sending account
-// (`to_recover_account`) to the `RecoveryAddress::RecoveryAddress` resource under
-// `recovery_address`. After this transaction has been executed successfully the account at
-// `recovery_address` and the `to_recover_account` may rotate the authentication key of
-// `to_recover_account` (the sender of this transaction).
-//
-// The sending account of this transaction (`to_recover_account`) must not have previously given away its unique key
-// rotation capability, and must be a VASP account. The account at `recovery_address`
-// must also be a VASP account belonging to the same VASP as the `to_recover_account`.
-// Additionally the account at `recovery_address` must have already initialized itself as
-// a recovery account address using the `AccountAdministrationScripts::create_recovery_address` transaction script.
-//
-// The sending account's (`to_recover_account`) key rotation capability is
-// removed in this transaction and stored in the `RecoveryAddress::RecoveryAddress`
-// resource stored under the account at `recovery_address`.
-//
-// # Parameters
-// | Name                 | Type      | Description                                                                                               |
-// | ------               | ------    | -------------                                                                                             |
-// | `to_recover_account` | `signer`  | The signer of the sending account of this transaction.                                                    |
-// | `recovery_address`   | `address` | The account address where the `to_recover_account`'s `DiemAccount::KeyRotationCapability` will be stored. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                       |
-// | ----------------           | --------------                                            | -------------                                                                                     |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `to_recover_account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.    |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`                      | `recovery_address` does not have a `RecoveryAddress` resource published under it.                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EINVALID_KEY_ROTATION_DELEGATION`       | `to_recover_account` and `recovery_address` do not belong to the same VASP.                       |
-// | `Errors::LIMIT_EXCEEDED`   | ` RecoveryAddress::EMAX_KEYS_REGISTERED`                  | `RecoveryAddress::MAX_REGISTERED_KEYS` have already been registered with this `recovery_address`. |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::create_recovery_address`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-type ScriptFunctionCall__AddRecoveryRotationCapability struct {
-	RecoveryAddress diemtypes.AccountAddress
+type ScriptFunctionCall__AcceptToken struct {
+	TokenType diemtypes.TypeTag
 }
 
-func (*ScriptFunctionCall__AddRecoveryRotationCapability) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__AcceptToken) isScriptFunctionCall() {}
 
-// # Summary
-// Adds a validator account to the validator set, and triggers a
-// reconfiguration of the system to admit the account to the validator set for the system. This
-// transaction can only be successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script adds the account at `validator_address` to the validator set.
-// This transaction emits a `DiemConfig::NewEpochEvent` event and triggers a
-// reconfiguration. Once the reconfiguration triggered by this script's
-// execution has been performed, the account at the `validator_address` is
-// considered to be a validator in the network.
-//
-// This transaction script will fail if the `validator_address` address is already in the validator set
-// or does not have a `ValidatorConfig::ValidatorConfig` resource already published under it.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.                                               |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be added to the validator set.                                                                    |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                                                               |
-// | ----------------           | --------------                               | -------------                                                                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `dr_account`.                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                                         |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | The sending account is not the Diem Root account.                                                                                         |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                          | The sending account is not the Diem Root account.                                                                                         |
-// | 0                          | 0                                            | The provided `validator_name` does not match the already-recorded human name for the validator.                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EINVALID_PROSPECTIVE_VALIDATOR` | The validator to be added does not have a `ValidatorConfig::ValidatorConfig` resource published under it, or its `config` field is empty. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EALREADY_A_VALIDATOR`           | The `validator_address` account is already a registered validator.                                                                        |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`            | An invalid time value was encountered in reconfiguration. Unlikely to occur.                                                              |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemSystem::EMAX_VALIDATORS`                | The validator set is already at its maximum size. The validator could not be added.                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__AddValidatorAndReconfigure struct {
-	SlidingNonce     uint64
-	ValidatorName    []byte
-	ValidatorAddress diemtypes.AccountAddress
+// Cancel current upgrade plan, the `sender` must have `UpgradePlanCapability`.
+type ScriptFunctionCall__CancelUpgradePlan struct {
 }
 
-func (*ScriptFunctionCall__AddValidatorAndReconfigure) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__CancelUpgradePlan) isScriptFunctionCall() {}
 
-// # Summary
-// Add a VASP domain to parent VASP account. The transaction can only be sent by
-// the Treasury Compliance account.
-//
-// # Technical Description
-// Adds a `VASPDomain::VASPDomain` to the `domains` field of the `VASPDomain::VASPDomains` resource published under
-// the account at `address`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                     |
-// | ------       | ------       | -------------                                                                                   |
-// | `tc_account` | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `address`    | `address`    | The `address` of the parent VASP account that will have have `domain` added to its domains.     |
-// | `domain`     | `vector<u8>` | The domain to be added.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                             | Description                                                                                                                            |
-// | ----------------           | --------------                           | -------------                                                                                                                          |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`            | The sending account is not the Treasury Compliance account.                                                                            |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`    | `tc_account` is not the Treasury Compliance account.                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAIN_MANAGER`        | The `VASPDomain::VASPDomainManager` resource is not yet published under the Treasury Compliance account.                                 |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAINS_NOT_PUBLISHED` | `address` does not have a `VASPDomain::VASPDomains` resource published under it.                                                         |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EDOMAIN_ALREADY_EXISTS`         | The `domain` already exists in the list of `VASPDomain::VASPDomain`s  in the `VASPDomain::VASPDomains` resource published under `address`. |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EINVALID_VASP_DOMAIN`        | The `domain` is greater in length than `VASPDomain::DOMAIN_LENGTH`.                                                                        |
-type ScriptFunctionCall__AddVaspDomain struct {
-	Address diemtypes.AccountAddress
-	Domain  []byte
+type ScriptFunctionCall__CastVote struct {
+	Token           diemtypes.TypeTag
+	ActionT         diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+	Agree           bool
+	Votes           serde.Uint128
 }
 
-func (*ScriptFunctionCall__AddVaspDomain) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__CastVote) isScriptFunctionCall() {}
 
-// # Summary
-// Burns the transaction fees collected in the `CoinType` currency so that the
-// Diem association may reclaim the backing coins off-chain. May only be sent
-// by the Treasury Compliance account.
-//
-// # Technical Description
-// Burns the transaction fees collected in `CoinType` so that the
-// association may reclaim the backing coins. Once this transaction has executed
-// successfully all transaction fees that will have been collected in
-// `CoinType` since the last time this script was called with that specific
-// currency. Both `balance` and `preburn` fields in the
-// `TransactionFee::TransactionFee<CoinType>` resource published under the `0xB1E55ED`
-// account address will have a value of 0 after the successful execution of this script.
-//
-// # Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<CoinType>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name         | Type     | Description                                                                                                                                         |
-// | ------       | ------   | -------------                                                                                                                                       |
-// | `CoinType`   | Type     | The Move type for the `CoinType` being added to the sending account of the transaction. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account` | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                                 |
-// | ----------------           | --------------                        | -------------                                               |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | The sending account is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `TransactionFee::ETRANSACTION_FEE`    | `CoinType` is not an accepted transaction fee currency.     |
-// | `Errors::INVALID_ARGUMENT` | `Diem::ECOIN`                        | The collected fees in `CoinType` are zero.                  |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-type ScriptFunctionCall__BurnTxnFees struct {
-	CoinType diemtypes.TypeTag
+type ScriptFunctionCall__ConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2 struct {
+	PackageAddress diemtypes.AccountAddress
 }
 
-func (*ScriptFunctionCall__BurnTxnFees) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2) isScriptFunctionCall() {}
 
-// # Summary
-// Burns the coins held in a preburn resource in the preburn queue at the
-// specified preburn address, which are equal to the `amount` specified in the
-// transaction. Finds the first relevant outstanding preburn request with
-// matching amount and removes the contained coins from the system. The sending
-// account must be the Treasury Compliance account.
-// The account that holds the preburn queue resource will normally be a Designated
-// Dealer, but there are no enforced requirements that it be one.
-//
-// # Technical Description
-// This transaction permanently destroys all the coins of `Token` type
-// stored in the `Diem::Preburn<Token>` resource published under the
-// `preburn_address` account address.
-//
-// This transaction will only succeed if the sending `account` has a
-// `Diem::BurnCapability<Token>`, and a `Diem::Preburn<Token>` resource
-// exists under `preburn_address`, with a non-zero `to_burn` field. After the successful execution
-// of this transaction the `total_value` field in the
-// `Diem::CurrencyInfo<Token>` resource published under `0xA550C18` will be
-// decremented by the value of the `to_burn` field of the preburn resource
-// under `preburn_address` immediately before this transaction, and the
-// `to_burn` field of the preburn resource will have a zero value.
-//
-// # Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<Token>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                        |
-// | ------            | ------    | -------------                                                                                                      |
-// | `Token`           | Type      | The Move type for the `Token` currency being burned. `Token` must be an already-registered currency on-chain.      |
-// | `tc_account`      | `signer`  | The signer of the sending account of this transaction, must have a burn capability for `Token` published under it. |
-// | `sliding_nonce`   | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                         |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                       |
-// | `amount`          | `u64`     | The amount to be burned.                                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                            | Description                                                                                                                         |
-// | ----------------              | --------------                          | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                          |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                                                       |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                                                                   |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.                                             |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_NOT_FOUND`              | The `Diem::PreburnQueue<Token>` resource under `preburn_address` does not contain a preburn request with a value matching `amount`. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN_QUEUE`                  | The account at `preburn_address` does not have a `Diem::PreburnQueue<Token>` resource published under it.                           |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                  | The specified `Token` is not a registered currency on-chain.                                                                        |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_txn_fees`
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-// * `TreasuryComplianceScripts::preburn`
-type ScriptFunctionCall__BurnWithAmount struct {
-	Token          diemtypes.TypeTag
-	SlidingNonce   uint64
-	PreburnAddress diemtypes.AccountAddress
-	Amount         uint64
+type ScriptFunctionCall__CreateAccountWithInitialAmount struct {
+	TokenType     diemtypes.TypeTag
+	FreshAddress  diemtypes.AccountAddress
+	AuthKey       []byte
+	InitialAmount serde.Uint128
 }
 
-func (*ScriptFunctionCall__BurnWithAmount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__CreateAccountWithInitialAmount) isScriptFunctionCall() {}
 
-// # Summary
-// Cancels and returns the coins held in the preburn area under
-// `preburn_address`, which are equal to the `amount` specified in the transaction. Finds the first preburn
-// resource with the matching amount and returns the funds to the `preburn_address`'s balance.
-// Can only be successfully sent by an account with Treasury Compliance role.
-//
-// # Technical Description
-// Cancels and returns all coins held in the `Diem::Preburn<Token>` resource under the `preburn_address` and
-// return the funds to the `preburn_address` account's `DiemAccount::Balance<Token>`.
-// The transaction must be sent by an `account` with a `Diem::BurnCapability<Token>`
-// resource published under it. The account at `preburn_address` must have a
-// `Diem::Preburn<Token>` resource published under it, and its value must be nonzero. The transaction removes
-// the entire balance held in the `Diem::Preburn<Token>` resource, and returns it back to the account's
-// `DiemAccount::Balance<Token>` under `preburn_address`. Due to this, the account at
-// `preburn_address` must already have a balance in the `Token` currency published
-// before this script is called otherwise the transaction will fail.
-//
-// # Events
-// The successful execution of this transaction will emit:
-// * A `Diem::CancelBurnEvent` on the event handle held in the `Diem::CurrencyInfo<Token>`
-// resource's `burn_events` published under `0xA550C18`.
-// * A `DiemAccount::ReceivedPaymentEvent` on the `preburn_address`'s
-// `DiemAccount::DiemAccount` `received_events` event handle with both the `payer` and `payee`
-// being `preburn_address`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                          |
-// | ------            | ------    | -------------                                                                                                                        |
-// | `Token`           | Type      | The Move type for the `Token` currenty that burning is being cancelled for. `Token` must be an already-registered currency on-chain. |
-// | `account`         | `signer`  | The signer of the sending account of this transaction, must have a burn capability for `Token` published under it.                   |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                         |
-// | `amount`          | `u64`     | The amount to be cancelled.                                                                                                          |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                     | Description                                                                                                                         |
-// | ----------------              | --------------                                   | -------------                                                                                                                       |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                         | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.                                             |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_NOT_FOUND`                       | The `Diem::PreburnQueue<Token>` resource under `preburn_address` does not contain a preburn request with a value matching `amount`. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN_QUEUE`                           | The account at `preburn_address` does not have a `Diem::PreburnQueue<Token>` resource published under it.                           |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                           | The specified `Token` is not a registered currency on-chain.                                                                        |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | The account at `preburn_address` doesn't have a balance resource for `Token`.                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | The depositing of the funds held in the prebun area would exceed the `account`'s account limits.                                    |
-// | `Errors::INVALID_STATE`       | `DualAttestation::EPAYEE_COMPLIANCE_KEY_NOT_SET` | The `account` does not have a compliance key set on it but dual attestion checking was performed.                                   |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_txn_fees`
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::preburn`
-type ScriptFunctionCall__CancelBurnWithAmount struct {
-	Token          diemtypes.TypeTag
-	PreburnAddress diemtypes.AccountAddress
-	Amount         uint64
+type ScriptFunctionCall__CreateAccountWithInitialAmountV2 struct {
+	TokenType     diemtypes.TypeTag
+	FreshAddress  diemtypes.AccountAddress
+	InitialAmount serde.Uint128
 }
 
-func (*ScriptFunctionCall__CancelBurnWithAmount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__CreateAccountWithInitialAmountV2) isScriptFunctionCall() {}
 
-// # Summary
-// Creates a Child VASP account with its parent being the sending account of the transaction.
-// The sender of the transaction must be a Parent VASP account.
-//
-// # Technical Description
-// Creates a `ChildVASP` account for the sender `parent_vasp` at `child_address` with a balance of
-// `child_initial_balance` in `CoinType` and an initial authentication key of
-// `auth_key_prefix | child_address`. Authentication key prefixes, and how to construct them from an ed25519 public key is described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// If `add_all_currencies` is true, the child address will have a zero balance in all available
-// currencies in the system.
-//
-// The new account will be a child account of the transaction sender, which must be a
-// Parent VASP account. The child account will be recorded against the limit of
-// child accounts of the creating Parent VASP account.
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `child_address`,
-// and the `rold_id` field being `Roles::CHILD_VASP_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// Successful execution with a `child_initial_balance` greater than zero will additionaly emit:
-// * A `DiemAccount::SentPaymentEvent` with the `payee` field being `child_address`.
-// This is emitted on the Parent VASP's `DiemAccount::DiemAccount` `sent_events` handle.
-// * A `DiemAccount::ReceivedPaymentEvent` with the  `payer` field being the Parent VASP's address.
-// This is emitted on the new Child VASPS's `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                    | Type         | Description                                                                                                                                 |
-// | ------                  | ------       | -------------                                                                                                                               |
-// | `CoinType`              | Type         | The Move type for the `CoinType` that the child account should be created with. `CoinType` must be an already-registered currency on-chain. |
-// | `parent_vasp`           | `signer`     | The reference of the sending account. Must be a Parent VASP account.                                                                        |
-// | `child_address`         | `address`    | Address of the to-be-created Child VASP account.                                                                                            |
-// | `auth_key_prefix`       | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                    |
-// | `add_all_currencies`    | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                  |
-// | `child_initial_balance` | `u64`        | The initial balance in `CoinType` to give the child account when it's created.                                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                             | Description                                                                              |
-// | ----------------            | --------------                                           | -------------                                                                            |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`            | The `auth_key_prefix` was not of length 32.                                              |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`                                    | The sending account wasn't a Parent VASP account.                                        |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                                        | The `child_address` address is already taken.                                            |
-// | `Errors::LIMIT_EXCEEDED`    | `VASP::ETOO_MANY_CHILDREN`                               | The sending account has reached the maximum number of allowed child accounts.            |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                                  | The `CoinType` is not a registered currency on-chain.                                    |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for the sending account has already been extracted.            |
-// | `Errors::NOT_PUBLISHED`     | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | The sending account doesn't have a balance in `CoinType`.                                |
-// | `Errors::LIMIT_EXCEEDED`    | `DiemAccount::EINSUFFICIENT_BALANCE`                    | The sending account doesn't have at least `child_initial_balance` of `CoinType` balance. |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::ECANNOT_CREATE_AT_VM_RESERVED`            | The `child_address` is the reserved address 0x0.                                         |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::add_recovery_rotation_capability`
-// * `AccountAdministrationScripts::create_recovery_address`
-type ScriptFunctionCall__CreateChildVaspAccount struct {
-	CoinType            diemtypes.TypeTag
-	ChildAddress        diemtypes.AccountAddress
-	AuthKeyPrefix       []byte
-	AddAllCurrencies    bool
-	ChildInitialBalance uint64
+// Destroy empty IdentifierNFT
+type ScriptFunctionCall__DestroyEmpty struct {
+	NftMeta diemtypes.TypeTag
+	NftBody diemtypes.TypeTag
 }
 
-func (*ScriptFunctionCall__CreateChildVaspAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__DestroyEmpty) isScriptFunctionCall() {}
 
-// # Summary
-// Creates a Designated Dealer account with the provided information, and initializes it with
-// default mint tiers. The transaction can only be sent by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Designated Dealer role at `addr` with authentication key
-// `auth_key_prefix` | `addr` and a 0 balance of type `Currency`. If `add_all_currencies` is true,
-// 0 balances for all available currencies in the system will also be added. This can only be
-// invoked by an account with the TreasuryCompliance role.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// At the time of creation the account is also initialized with default mint tiers of (500_000,
-// 5000_000, 50_000_000, 500_000_000), and preburn areas for each currency that is added to the
-// account.
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `addr`,
-// and the `rold_id` field being `Roles::DESIGNATED_DEALER_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                                         |
-// | ------               | ------       | -------------                                                                                                                                       |
-// | `Currency`           | Type         | The Move type for the `Currency` that the Designated Dealer should be initialized with. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`         | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                     |
-// | `sliding_nonce`      | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                          |
-// | `addr`               | `address`    | Address of the to-be-created Designated Dealer account.                                                                                             |
-// | `auth_key_prefix`    | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                            |
-// | `human_name`         | `vector<u8>` | ASCII-encoded human name for the Designated Dealer.                                                                                                 |
-// | `add_all_currencies` | `bool`       | Whether to publish preburn, balance, and tier info resources for all known (SCS) currencies or just `Currency` when the account is created.         |
-//
-
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `Currency` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `addr` address is already taken.                                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::tiered_mint`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-type ScriptFunctionCall__CreateDesignatedDealer struct {
-	Currency         diemtypes.TypeTag
-	SlidingNonce     uint64
-	Addr             diemtypes.AccountAddress
-	AuthKeyPrefix    []byte
-	HumanName        []byte
-	AddAllCurrencies bool
+// remove terminated proposal from proposer
+type ScriptFunctionCall__DestroyTerminatedProposal struct {
+	TokenT          diemtypes.TypeTag
+	ActionT         diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__CreateDesignatedDealer) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__DestroyTerminatedProposal) isScriptFunctionCall() {}
 
-// # Summary
-// Creates a Parent VASP account with the specified human name. Must be called by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Parent VASP role at `address` with authentication key
-// `auth_key_prefix` | `new_account_address` and a 0 balance of type `CoinType`. If
-// `add_all_currencies` is true, 0 balances for all available currencies in the system will
-// also be added. This can only be invoked by an TreasuryCompliance account.
-// `sliding_nonce` is a unique nonce for operation, see `SlidingNonce` for details.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::PARENT_VASP_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                                                                                    |
-// | ------                | ------       | -------------                                                                                                                                                  |
-// | `CoinType`            | Type         | The Move type for the `CoinType` currency that the Parent VASP account should be initialized with. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                                |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                                     |
-// | `new_account_address` | `address`    | Address of the to-be-created Parent VASP account.                                                                                                              |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                                       |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the Parent VASP.                                                                                                                  |
-// | `add_all_currencies`  | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `CoinType` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::add_recovery_rotation_capability`
-// * `AccountAdministrationScripts::create_recovery_address`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-type ScriptFunctionCall__CreateParentVaspAccount struct {
-	CoinType          diemtypes.TypeTag
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
-	AddAllCurrencies  bool
+// Disable account's auto-accept-token feature.
+// The script function is reenterable.
+type ScriptFunctionCall__DisableAutoAcceptToken struct {
 }
 
-func (*ScriptFunctionCall__CreateParentVaspAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__DisableAutoAcceptToken) isScriptFunctionCall() {}
 
-// # Summary
-// Initializes the sending account as a recovery address that may be used by
-// other accounts belonging to the same VASP as `account`.
-// The sending account must be a VASP account, and can be either a child or parent VASP account.
-// Multiple recovery addresses can exist for a single VASP, but accounts in
-// each must be disjoint.
-//
-// # Technical Description
-// Publishes a `RecoveryAddress::RecoveryAddress` resource under `account`. It then
-// extracts the `DiemAccount::KeyRotationCapability` for `account` and adds
-// it to the resource. After the successful execution of this transaction
-// other accounts may add their key rotation to this resource so that `account`
-// may be used as a recovery account for those accounts.
-//
-// # Parameters
-// | Name      | Type     | Description                                           |
-// | ------    | ------   | -------------                                         |
-// | `account` | `signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                   |
-// | ----------------            | --------------                                             | -------------                                                                                 |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.          |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::ENOT_A_VASP`                             | `account` is not a VASP account.                                                              |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::EKEY_ROTATION_DEPENDENCY_CYCLE`          | A key rotation recovery cycle would be created by adding `account`'s key rotation capability. |
-// | `Errors::ALREADY_PUBLISHED` | `RecoveryAddress::ERECOVERY_ADDRESS`                       | A `RecoveryAddress::RecoveryAddress` resource has already been published under `account`.     |
-//
-// # Related Scripts
-// * `Script::add_recovery_rotation_capability`
-// * `Script::rotate_authentication_key_with_recovery_address`
-type ScriptFunctionCall__CreateRecoveryAddress struct {
+type ScriptFunctionCall__EmptyScript struct {
 }
 
-func (*ScriptFunctionCall__CreateRecoveryAddress) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__EmptyScript) isScriptFunctionCall() {}
 
-// # Summary
-// Creates a Validator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorConfig::ValidatorConfig` resource with empty `config`, and
-// `operator_account` fields. The `human_name` field of the
-// `ValidatorConfig::ValidatorConfig` is set to the passed in `human_name`.
-// This script does not add the validator to the validator set or the system,
-// but only creates the account.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::VALIDATOR_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                              |
-// | ------                | ------       | -------------                                                                            |
-// | `dr_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.     |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.               |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                          |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account. |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__CreateValidatorAccount struct {
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
+// Enable account's auto-accept-token feature.
+// The script function is reenterable.
+type ScriptFunctionCall__EnableAutoAcceptToken struct {
 }
 
-func (*ScriptFunctionCall__CreateValidatorAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__EnableAutoAcceptToken) isScriptFunctionCall() {}
 
-// # Summary
-// Creates a Validator Operator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator Operator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorOperatorConfig::ValidatorOperatorConfig` resource with the specified `human_name`.
-// This script does not assign the validator operator to any validator accounts but only creates the account.
-// Authentication key prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::VALIDATOR_OPERATOR_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                              |
-// | ------                | ------       | -------------                                                                            |
-// | `dr_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.     |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.               |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                          |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account. |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__CreateValidatorOperatorAccount struct {
-	SlidingNonce      uint64
-	NewAccountAddress diemtypes.AccountAddress
-	AuthKeyPrefix     []byte
-	HumanName         []byte
+// Once the proposal is agreed, anyone can call the method to make the proposal happen.
+type ScriptFunctionCall__Execute struct {
+	TokenT          diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__CreateValidatorOperatorAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__Execute) isScriptFunctionCall() {}
 
-// # Summary
-// Publishes a `VASPDomain::VASPDomains` resource under a parent VASP account.
-// The sending account must be a parent VASP account.
-//
-// # Technical Description
-// Publishes a `VASPDomain::VASPDomains` resource under `account`.
-// The The `VASPDomain::VASPDomains` resource's `domains` field is a vector
-// of VASPDomain, and will be empty on at the end of processing this transaction.
-//
-// # Parameters
-// | Name      | Type     | Description                                           |
-// | ------    | ------   | -------------                                         |
-// | `account` | `signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason              | Description                                                                    |
-// | ----------------            | --------------            | -------------                                                                  |
-// | `Errors::ALREADY_PUBLISHED` | `VASPDomain::EVASP_DOMAINS` | A `VASPDomain::VASPDomains` resource has already been published under `account`. |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`     | The sending `account` was not a parent VASP account.                           |
-type ScriptFunctionCall__CreateVaspDomains struct {
+// Execute module upgrade plan propose by submit module upgrade plan, the propose must been agreed, and anyone can execute this function.
+type ScriptFunctionCall__ExecuteModuleUpgradePlanPropose struct {
+	Token           diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__CreateVaspDomains) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ExecuteModuleUpgradePlanPropose) isScriptFunctionCall() {}
 
-// # Summary
-// Freezes the account at `address`. The sending account of this transaction
-// must be the Treasury Compliance account. The account being frozen cannot be
-// the Diem Root or Treasury Compliance account. After the successful
-// execution of this transaction no transactions may be sent from the frozen
-// account, and the frozen account may not send or receive coins.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `true` and emits a
-// `AccountFreezing::FreezeAccountEvent`. The transaction sender must be the
-// Treasury Compliance account, but the account at `to_freeze_account` must
-// not be either `0xA550C18` (the Diem Root address), or `0xB1E55ED` (the
-// Treasury Compliance address). Note that this is a per-account property
-// e.g., freezing a Parent VASP will not effect the status any of its child
-// accounts and vice versa.
-//
-
-// # Events
-// Successful execution of this transaction will emit a `AccountFreezing::FreezeAccountEvent` on
-// the `freeze_event_handle` held in the `AccountFreezing::FreezeEventsHolder` resource published
-// under `0xA550C18` with the `frozen_address` being the `to_freeze_account`.
-//
-// # Parameters
-// | Name                | Type      | Description                                                                                     |
-// | ------              | ------    | -------------                                                                                   |
-// | `tc_account`        | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`     | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `to_freeze_account` | `address` | The account address to be frozen.                                                               |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                |
-// | ----------------           | --------------                               | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`        | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`                | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_TC`         | `to_freeze_account` was the Treasury Compliance account (`0xB1E55ED`).                     |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_DIEM_ROOT` | `to_freeze_account` was the Diem Root account (`0xA550C18`).                              |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::unfreeze_account`
-type ScriptFunctionCall__FreezeAccount struct {
-	SlidingNonce    uint64
-	ToFreezeAccount diemtypes.AccountAddress
+type ScriptFunctionCall__ExecuteOnChainConfigProposal struct {
+	ConfigT    diemtypes.TypeTag
+	ProposalId uint64
 }
 
-func (*ScriptFunctionCall__FreezeAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ExecuteOnChainConfigProposal) isScriptFunctionCall() {}
 
-// # Summary
-// Initializes the Diem consensus config that is stored on-chain.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Initializes the `DiemConsensusConfig` on-chain config to empty and allows future updates from DiemRoot via
-// `update_diem_consensus_config`. This doesn't emit a `DiemConfig::NewEpochEvent`.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                |
-// | ------          | ------    | -------------                                                              |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.               |
-// | `sliding_nonce` | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-type ScriptFunctionCall__InitializeDiemConsensusConfig struct {
-	SlidingNonce uint64
+type ScriptFunctionCall__ExecuteOnChainConfigProposalV2 struct {
+	TokenType       diemtypes.TypeTag
+	ConfigT         diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__InitializeDiemConsensusConfig) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ExecuteOnChainConfigProposalV2) isScriptFunctionCall() {}
 
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another by multi-agent transaction.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata`.
-// Dual attestation is not applied to this script as payee is also a signer of the transaction.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `signer`     | The signer of the sending account that coins are being transferred from.                                                     |
-// | `payee`              | `signer`     | The signer of the receiving account that the coins are being transferred to.                                                 |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`       | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`             | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`             | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`             | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`        | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-type ScriptFunctionCall__PeerToPeerBySigners struct {
-	Currency diemtypes.TypeTag
-	Amount   uint64
-	Metadata []byte
+type ScriptFunctionCall__ExecuteWithdrawProposal struct {
+	TokenT          diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__PeerToPeerBySigners) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ExecuteWithdrawProposal) isScriptFunctionCall() {}
 
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata` and an (optional) `metadata_signature` on the message of the form
-// `metadata` | `Signer::address_of(payer)` | `amount` | `DualAttestation::DOMAIN_SEPARATOR`, that
-// has been signed by the `payee`'s private key associated with the `compliance_public_key` held in
-// the `payee`'s `DualAttestation::Credential`. Both the `Signer::address_of(payer)` and `amount` fields
-// in the `metadata_signature` must be BCS-encoded bytes, and `|` denotes concatenation.
-// The `metadata` and `metadata_signature` parameters are only required if `amount` >=
-// `DualAttestation::get_cur_microdiem_limit` XDX and `payer` and `payee` are distinct VASPs.
-// However, a transaction sender can opt in to dual attestation even when it is not required
-// (e.g., a DesignatedDealer -> VASP payment) by providing a non-empty `metadata_signature`.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `signer`     | The signer of the sending account that coins are being transferred from.                                                     |
-// | `payee`              | `address`    | The address of the account the coins are being transferred to.                                                               |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-// | `metadata_signature` | `vector<u8>` | Optional signature over `metadata` and payment information. See                                                              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`       | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`             | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`             | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`             | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EMALFORMED_METADATA_SIGNATURE` | `metadata_signature` is not 64 bytes.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_METADATA_SIGNATURE`   | `metadata_signature` does not verify on the against the `payee'`s `DualAttestation::Credential` `compliance_public_key` public key. |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`        | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `PaymentScripts::peer_to_peer_by_signers`
-type ScriptFunctionCall__PeerToPeerWithMetadata struct {
-	Currency          diemtypes.TypeTag
-	Payee             diemtypes.AccountAddress
-	Amount            uint64
-	Metadata          []byte
-	MetadataSignature []byte
+// Let user change their vote during the voting time.
+type ScriptFunctionCall__FlipVote struct {
+	TokenT          diemtypes.TypeTag
+	ActionT         diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
 }
 
-func (*ScriptFunctionCall__PeerToPeerWithMetadata) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__FlipVote) isScriptFunctionCall() {}
 
-// # Summary
-// Moves a specified number of coins in a given currency from the account's
-// balance to its preburn area after which the coins may be burned. This
-// transaction may be sent by any account that holds a balance and preburn area
-// in the specified currency.
-//
-// # Technical Description
-// Moves the specified `amount` of coins in `Token` currency from the sending `account`'s
-// `DiemAccount::Balance<Token>` to the `Diem::Preburn<Token>` published under the same
-// `account`. `account` must have both of these resources published under it at the start of this
-// transaction in order for it to execute successfully.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * `DiemAccount::SentPaymentEvent ` on `account`'s `DiemAccount::DiemAccount` `sent_events`
-// handle with the `payee` and `payer` fields being `account`'s address; and
-// * A `Diem::PreburnEvent` with `Token`'s currency code on the
-// `Diem::CurrencyInfo<Token`'s `preburn_events` handle for `Token` and with
-// `preburn_address` set to `account`'s address.
-//
-// # Parameters
-// | Name      | Type     | Description                                                                                                                      |
-// | ------    | ------   | -------------                                                                                                                    |
-// | `Token`   | Type     | The Move type for the `Token` currency being moved to the preburn area. `Token` must be an already-registered currency on-chain. |
-// | `account` | `signer` | The signer of the sending account.                                                                                               |
-// | `amount`  | `u64`    | The amount in `Token` to be moved to the preburn area.                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category           | Error Reason                                             | Description                                                                             |
-// | ----------------         | --------------                                           | -------------                                                                           |
-// | `Errors::NOT_PUBLISHED`  | `Diem::ECURRENCY_INFO`                                  | The `Token` is not a registered currency on-chain.                                      |
-// | `Errors::INVALID_STATE`  | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for `account` has already been extracted.                     |
-// | `Errors::LIMIT_EXCEEDED` | `DiemAccount::EINSUFFICIENT_BALANCE`                    | `amount` is greater than `payer`'s balance in `Token`.                                  |
-// | `Errors::NOT_PUBLISHED`  | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | `account` doesn't hold a balance in `Token`.                                            |
-// | `Errors::NOT_PUBLISHED`  | `Diem::EPREBURN`                                        | `account` doesn't have a `Diem::Preburn<Token>` resource published under it.           |
-// | `Errors::INVALID_STATE`  | `Diem::EPREBURN_OCCUPIED`                               | The `value` field in the `Diem::Preburn<Token>` resource under the sender is non-zero. |
-// | `Errors::NOT_PUBLISHED`  | `Roles::EROLE_ID`                                        | The `account` did not have a role assigned to it.                                       |
-// | `Errors::REQUIRES_ROLE`  | `Roles::EDESIGNATED_DEALER`                              | The `account` did not have the role of DesignatedDealer.                                |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::burn_txn_fees`
-type ScriptFunctionCall__Preburn struct {
-	Token  diemtypes.TypeTag
-	Amount uint64
+type ScriptFunctionCall__InitDataSource struct {
+	OracleT   diemtypes.TypeTag
+	InitValue serde.Uint128
 }
 
-func (*ScriptFunctionCall__Preburn) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__InitDataSource) isScriptFunctionCall() {}
 
-// # Summary
-// Rotates the authentication key of the sending account to the newly-specified ed25519 public key and
-// publishes a new shared authentication key derived from that public key under the sender's account.
-// Any account can send this transaction.
-//
-// # Technical Description
-// Rotates the authentication key of the sending account to the
-// [authentication key derived from `public_key`](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys)
-// and publishes a `SharedEd25519PublicKey::SharedEd25519PublicKey` resource
-// containing the 32-byte ed25519 `public_key` and the `DiemAccount::KeyRotationCapability` for
-// `account` under `account`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                        |
-// | ------       | ------       | -------------                                                                                      |
-// | `account`    | `signer`     | The signer of the sending account of the transaction.                                              |
-// | `public_key` | `vector<u8>` | A valid 32-byte Ed25519 public key for `account`'s authentication key to be rotated to and stored. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                         |
-// | ----------------            | --------------                                             | -------------                                                                                       |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability` resource.       |
-// | `Errors::ALREADY_PUBLISHED` | `SharedEd25519PublicKey::ESHARED_KEY`                      | The `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is already published under `account`. |
-// | `Errors::INVALID_ARGUMENT`  | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY`            | `public_key` is an invalid ed25519 public key.                                                      |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_shared_ed25519_public_key`
-type ScriptFunctionCall__PublishSharedEd25519PublicKey struct {
-	PublicKey []byte
-}
-
-func (*ScriptFunctionCall__PublishSharedEd25519PublicKey) isScriptFunctionCall() {}
-
-// # Summary
-// Updates a validator's configuration. This does not reconfigure the system and will not update
-// the configuration in the validator set that is seen by other validators in the network. Can
-// only be successfully sent by a Validator Operator account that is already registered with a
-// validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It does not emit a `DiemConfig::NewEpochEvent`
-// so the copy of this config held in the validator set will not be updated, and the changes are
-// only "locally" under the `validator_account` account address.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                        |
-// | ------                        | ------       | -------------                                                                                                      |
-// | `validator_operator_account`  | `signer`     | Signer of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                          |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                               |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.             |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__RegisterValidatorConfig struct {
-	ValidatorAccount          diemtypes.AccountAddress
-	ConsensusPubkey           []byte
-	ValidatorNetworkAddresses []byte
-	FullnodeNetworkAddresses  []byte
-}
-
-func (*ScriptFunctionCall__RegisterValidatorConfig) isScriptFunctionCall() {}
-
-// # Summary
-// This script removes a validator account from the validator set, and triggers a reconfiguration
-// of the system to remove the validator from the system. This transaction can only be
-// successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script removes the account at `validator_address` from the validator set. This transaction
-// emits a `DiemConfig::NewEpochEvent` event. Once the reconfiguration triggered by this event
-// has been performed, the account at `validator_address` is no longer considered to be a
-// validator in the network. This transaction will fail if the validator at `validator_address`
-// is not in the validator set.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.                                               |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be removed from the validator set.                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                     |
-// | ----------------           | --------------                          | -------------                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                                  |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.      |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | The sending account is not the Diem Root account or Treasury Compliance account                |
-// | 0                          | 0                                       | The provided `validator_name` does not match the already-recorded human name for the validator. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::ENOT_AN_ACTIVE_VALIDATOR` | The validator to be removed is not in the validator set.                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                              |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                              |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`      | An invalid time value was encountered in reconfiguration. Unlikely to occur.                    |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__RemoveValidatorAndReconfigure struct {
-	SlidingNonce     uint64
-	ValidatorName    []byte
-	ValidatorAddress diemtypes.AccountAddress
-}
-
-func (*ScriptFunctionCall__RemoveValidatorAndReconfigure) isScriptFunctionCall() {}
-
-// # Summary
-// Remove a VASP domain from parent VASP account. The transaction can only be sent by
-// the Treasury Compliance account.
-//
-// # Technical Description
-// Removes a `VASPDomain::VASPDomain` from the `domains` field of the `VASPDomain::VASPDomains` resource published under
-// account with `address`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                     |
-// | ------       | ------       | -------------                                                                                   |
-// | `tc_account` | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `address`    | `address`    | The `address` of parent VASP account that will update its domains.                              |
-// | `domain`     | `vector<u8>` | The domain name.                                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                             | Description                                                                                                                            |
-// | ----------------           | --------------                           | -------------                                                                                                                          |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`            | The sending account is not the Treasury Compliance account.                                                                            |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`    | `tc_account` is not the Treasury Compliance account.                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAIN_MANAGER`        | The `VASPDomain::VASPDomainManager` resource is not yet published under the Treasury Compliance account.                                 |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAINS_NOT_PUBLISHED` | `address` does not have a `VASPDomain::VASPDomains` resource published under it.                                                         |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EINVALID_VASP_DOMAIN`        | The `domain` is greater in length than `VASPDomain::DOMAIN_LENGTH`.                                                                        |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EVASP_DOMAIN_NOT_FOUND`              | The `domain` does not exist in the list of `VASPDomain::VASPDomain`s  in the `VASPDomain::VASPDomains` resource published under `address`. |
-type ScriptFunctionCall__RemoveVaspDomain struct {
-	Address diemtypes.AccountAddress
-	Domain  []byte
-}
-
-func (*ScriptFunctionCall__RemoveVaspDomain) isScriptFunctionCall() {}
-
-// # Summary
-// Rotates the `account`'s authentication key to the supplied new authentication key. May be sent by any account.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key`
-// field to `new_key`. `new_key` must be a valid authentication key that
-// corresponds to an ed25519 public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name      | Type         | Description                                       |
-// | ------    | ------       | -------------                                     |
-// | `account` | `signer`     | Signer of the sending account of the transaction. |
-// | `new_key` | `vector<u8>` | New authentication key to be used for `account`.  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                         |
-// | ----------------           | --------------                                            | -------------                                                                       |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                    |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-type ScriptFunctionCall__RotateAuthenticationKey struct {
-	NewKey []byte
-}
-
-func (*ScriptFunctionCall__RotateAuthenticationKey) isScriptFunctionCall() {}
-
-// # Summary
-// Rotates the sender's authentication key to the supplied new authentication key. May be sent by
-// any account that has a sliding nonce resource published under it (usually this is Treasury
-// Compliance or Diem Root accounts).
-//
-// # Technical Description
-// Rotates the `account`'s `DiemAccount::DiemAccount` `authentication_key`
-// field to `new_key`. `new_key` must be a valid authentication key that
-// corresponds to an ed25519 public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                |
-// | ------          | ------       | -------------                                                              |
-// | `account`       | `signer`     | Signer of the sending account of the transaction.                          |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `new_key`       | `vector<u8>` | New authentication key to be used for `account`.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                           |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-type ScriptFunctionCall__RotateAuthenticationKeyWithNonce struct {
-	SlidingNonce uint64
-	NewKey       []byte
-}
-
-func (*ScriptFunctionCall__RotateAuthenticationKeyWithNonce) isScriptFunctionCall() {}
-
-// # Summary
-// Rotates the specified account's authentication key to the supplied new authentication key. May
-// only be sent by the Diem Root account as a write set transaction.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid authentication key that corresponds to an ed25519
-// public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                                       |
-// | ------          | ------       | -------------                                                                                     |
-// | `dr_account`    | `signer`     | The signer of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`       | `signer`     | Signer of account specified in the `execute_as` field of the write set transaction.               |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.          |
-// | `new_key`       | `vector<u8>` | New authentication key to be used for `account`.                                                  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                                |
-// | ----------------           | --------------                                            | -------------                                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                            | A `SlidingNonce` resource is not published under `dr_account`.                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                            | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                            | The `sliding_nonce` in `dr_account` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                   | The `sliding_nonce` in` dr_account` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.                        |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                                           |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-type ScriptFunctionCall__RotateAuthenticationKeyWithNonceAdmin struct {
-	SlidingNonce uint64
-	NewKey       []byte
-}
-
-func (*ScriptFunctionCall__RotateAuthenticationKeyWithNonceAdmin) isScriptFunctionCall() {}
-
-// # Summary
-// Rotates the authentication key of a specified account that is part of a recovery address to a
-// new authentication key. Only used for accounts that are part of a recovery address (see
-// `AccountAdministrationScripts::add_recovery_rotation_capability` for account restrictions).
-//
-// # Technical Description
-// Rotates the authentication key of the `to_recover` account to `new_key` using the
-// `DiemAccount::KeyRotationCapability` stored in the `RecoveryAddress::RecoveryAddress` resource
-// published under `recovery_address`. `new_key` must be a valide authentication key as described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-// This transaction can be sent either by the `to_recover` account, or by the account where the
-// `RecoveryAddress::RecoveryAddress` resource is published that contains `to_recover`'s `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                                   |
-// | ------             | ------       | -------------                                                                                                                 |
-// | `account`          | `signer`     | Signer of the sending account of the transaction.                                                                             |
-// | `recovery_address` | `address`    | Address where `RecoveryAddress::RecoveryAddress` that holds `to_recover`'s `DiemAccount::KeyRotationCapability` is published. |
-// | `to_recover`       | `address`    | The address of the account whose authentication key will be updated.                                                          |
-// | `new_key`          | `vector<u8>` | New authentication key to be used for the account at the `to_recover` address.                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                                                                         |
-// | ----------------           | --------------                               | -------------                                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`         | `recovery_address` does not have a `RecoveryAddress::RecoveryAddress` resource published under it.                                                  |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::ECANNOT_ROTATE_KEY`        | The address of `account` is not `recovery_address` or `to_recover`.                                                                                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EACCOUNT_NOT_RECOVERABLE`  | `to_recover`'s `DiemAccount::KeyRotationCapability`  is not in the `RecoveryAddress::RecoveryAddress`  resource published under `recovery_address`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY` | `new_key` was an invalid length.                                                                                                                    |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-type ScriptFunctionCall__RotateAuthenticationKeyWithRecoveryAddress struct {
-	RecoveryAddress diemtypes.AccountAddress
-	ToRecover       diemtypes.AccountAddress
-	NewKey          []byte
-}
-
-func (*ScriptFunctionCall__RotateAuthenticationKeyWithRecoveryAddress) isScriptFunctionCall() {}
-
-// # Summary
-// Updates the url used for off-chain communication, and the public key used to verify dual
-// attestation on-chain. Transaction can be sent by any account that has dual attestation
-// information published under it. In practice the only such accounts are Designated Dealers and
-// Parent VASPs.
-//
-// # Technical Description
-// Updates the `base_url` and `compliance_public_key` fields of the `DualAttestation::Credential`
-// resource published under `account`. The `new_key` must be a valid ed25519 public key.
-//
-// # Events
-// Successful execution of this transaction emits two events:
-// * A `DualAttestation::ComplianceKeyRotationEvent` containing the new compliance public key, and
-// the blockchain time at which the key was updated emitted on the `DualAttestation::Credential`
-// `compliance_key_rotation_events` handle published under `account`; and
-// * A `DualAttestation::BaseUrlRotationEvent` containing the new base url to be used for
-// off-chain communication, and the blockchain time at which the url was updated emitted on the
-// `DualAttestation::Credential` `base_url_rotation_events` handle published under `account`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                               |
-// | ------    | ------       | -------------                                                             |
-// | `account` | `signer`     | Signer of the sending account of the transaction.                         |
-// | `new_url` | `vector<u8>` | ASCII-encoded url to be used for off-chain communication with `account`.  |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for on-chain dual attestation checking. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                           | Description                                                                |
-// | ----------------           | --------------                         | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`    | `DualAttestation::ECREDENTIAL`         | A `DualAttestation::Credential` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_PUBLIC_KEY` | `new_key` is not a valid ed25519 public key.                               |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountCreationScripts::create_designated_dealer`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-type ScriptFunctionCall__RotateDualAttestationInfo struct {
-	NewUrl []byte
-	NewKey []byte
-}
-
-func (*ScriptFunctionCall__RotateDualAttestationInfo) isScriptFunctionCall() {}
-
-// # Summary
-// Rotates the authentication key in a `SharedEd25519PublicKey`. This transaction can be sent by
-// any account that has previously published a shared ed25519 public key using
-// `AccountAdministrationScripts::publish_shared_ed25519_public_key`.
-//
-// # Technical Description
-// `public_key` must be a valid ed25519 public key.  This transaction first rotates the public key stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` resource to `public_key`, after which it
-// rotates the `account`'s authentication key to the new authentication key derived from `public_key` as defined
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys)
-// using the `DiemAccount::KeyRotationCapability` stored in `account`'s `SharedEd25519PublicKey::SharedEd25519PublicKey`.
-//
-// # Parameters
-// | Name         | Type         | Description                                           |
-// | ------       | ------       | -------------                                         |
-// | `account`    | `signer`     | The signer of the sending account of the transaction. |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                    | Description                                                                                   |
-// | ----------------           | --------------                                  | -------------                                                                                 |
-// | `Errors::NOT_PUBLISHED`    | `SharedEd25519PublicKey::ESHARED_KEY`           | A `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY` | `public_key` is an invalid ed25519 public key.                                                |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::publish_shared_ed25519_public_key`
-type ScriptFunctionCall__RotateSharedEd25519PublicKey struct {
-	PublicKey []byte
-}
-
-func (*ScriptFunctionCall__RotateSharedEd25519PublicKey) isScriptFunctionCall() {}
-
-// # Summary
-// Updates the gas constants stored on chain and used by the VM for gas
-// metering. This transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the on-chain config holding the `DiemVMConfig` and emits a
-// `DiemConfig::NewEpochEvent` to trigger a reconfiguration of the system.
-//
-// # Parameters
-// | Name                                | Type     | Description                                                                                            |
-// | ------                              | ------   | -------------                                                                                          |
-// | `account`                           | `signer` | Signer of the sending account. Must be the Diem Root account.                                          |
-// | `sliding_nonce`                     | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                             |
-// | `global_memory_per_byte_cost`       | `u64`    | The new cost to read global memory per-byte to be used for gas metering.                               |
-// | `global_memory_per_byte_write_cost` | `u64`    | The new cost to write global memory per-byte to be used for gas metering.                              |
-// | `min_transaction_gas_units`         | `u64`    | The new flat minimum amount of gas required for any transaction.                                       |
-// | `large_transaction_cutoff`          | `u64`    | The new size over which an additional charge will be assessed for each additional byte.                |
-// | `intrinsic_gas_per_byte`            | `u64`    | The new number of units of gas that to be charged per-byte over the new `large_transaction_cutoff`.    |
-// | `maximum_number_of_gas_units`       | `u64`    | The new maximum number of gas units that can be set in a transaction.                                  |
-// | `min_price_per_gas_unit`            | `u64`    | The new minimum gas price that can be set for a transaction.                                           |
-// | `max_price_per_gas_unit`            | `u64`    | The new maximum gas price that can be set for a transaction.                                           |
-// | `max_transaction_size_in_bytes`     | `u64`    | The new maximum size of a transaction that can be processed.                                           |
-// | `gas_unit_scaling_factor`           | `u64`    | The new scaling factor to use when scaling between external and internal gas units.                    |
-// | `default_account_size`              | `u64`    | The new default account size to use when assessing final costs for reads and writes to global storage. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                | Description                                                                                |
-// | ----------------           | --------------                              | -------------                                                                              |
-// | `Errors::INVALID_ARGUMENT` | `DiemVMConfig::EGAS_CONSTANT_INCONSISTENCY` | The provided gas constants are inconsistent.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`              | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`              | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`              | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`     | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                 | `account` is not the Diem Root account.                                                    |
-type ScriptFunctionCall__SetGasConstants struct {
-	SlidingNonce                 uint64
+type ScriptFunctionCall__Initialize struct {
+	StdlibVersion                uint64
+	RewardDelay                  uint64
+	PreMineStcAmount             serde.Uint128
+	TimeMintStcAmount            serde.Uint128
+	TimeMintStcPeriod            uint64
+	ParentHash                   []byte
+	AssociationAuthKey           []byte
+	GenesisAuthKey               []byte
+	ChainId                      uint8
+	GenesisTimestamp             uint64
+	UncleRateTarget              uint64
+	EpochBlockCount              uint64
+	BaseBlockTimeTarget          uint64
+	BaseBlockDifficultyWindow    uint64
+	BaseRewardPerBlock           serde.Uint128
+	BaseRewardPerUnclePercent    uint64
+	MinBlockTimeTarget           uint64
+	MaxBlockTimeTarget           uint64
+	BaseMaxUnclesPerBlock        uint64
+	BaseBlockGasLimit            uint64
+	Strategy                     uint8
+	ScriptAllowed                bool
+	ModulePublishingAllowed      bool
+	InstructionSchedule          []byte
+	NativeSchedule               []byte
 	GlobalMemoryPerByteCost      uint64
 	GlobalMemoryPerByteWriteCost uint64
 	MinTransactionGasUnits       uint64
 	LargeTransactionCutoff       uint64
-	IntrinsicGasPerByte          uint64
+	InstrinsicGasPerByte         uint64
 	MaximumNumberOfGasUnits      uint64
 	MinPricePerGasUnit           uint64
 	MaxPricePerGasUnit           uint64
 	MaxTransactionSizeInBytes    uint64
 	GasUnitScalingFactor         uint64
 	DefaultAccountSize           uint64
+	VotingDelay                  uint64
+	VotingPeriod                 uint64
+	VotingQuorumRate             uint8
+	MinActionDelay               uint64
+	TransactionTimeout           uint64
 }
 
-func (*ScriptFunctionCall__SetGasConstants) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__Initialize) isScriptFunctionCall() {}
 
-// # Summary
-// Updates a validator's configuration, and triggers a reconfiguration of the system to update the
-// validator set with this new validator configuration.  Can only be successfully sent by a
-// Validator Operator account that is already registered with a validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It then emits a `DiemConfig::NewEpochEvent` to
-// trigger a reconfiguration of the system.  This reconfiguration will update the validator set
-// on-chain with the updated `ValidatorConfig::ValidatorConfig`.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                        |
-// | ------                        | ------       | -------------                                                                                                      |
-// | `validator_operator_account`  | `signer`     | Signer of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                          |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                               |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.             |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR_OPERATOR`                   | `validator_operator_account` does not have a Validator Operator role.                                 |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`             | An invalid time value was encountered in reconfiguration. Unlikely to occur.                          |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::register_validator_config`
-type ScriptFunctionCall__SetValidatorConfigAndReconfigure struct {
-	ValidatorAccount          diemtypes.AccountAddress
-	ConsensusPubkey           []byte
-	ValidatorNetworkAddresses []byte
-	FullnodeNetworkAddresses  []byte
+type ScriptFunctionCall__InitializeV2 struct {
+	StdlibVersion                uint64
+	RewardDelay                  uint64
+	TotalStcAmount               serde.Uint128
+	PreMineStcAmount             serde.Uint128
+	TimeMintStcAmount            serde.Uint128
+	TimeMintStcPeriod            uint64
+	ParentHash                   []byte
+	AssociationAuthKey           []byte
+	GenesisAuthKey               []byte
+	ChainId                      uint8
+	GenesisTimestamp             uint64
+	UncleRateTarget              uint64
+	EpochBlockCount              uint64
+	BaseBlockTimeTarget          uint64
+	BaseBlockDifficultyWindow    uint64
+	BaseRewardPerBlock           serde.Uint128
+	BaseRewardPerUnclePercent    uint64
+	MinBlockTimeTarget           uint64
+	MaxBlockTimeTarget           uint64
+	BaseMaxUnclesPerBlock        uint64
+	BaseBlockGasLimit            uint64
+	Strategy                     uint8
+	ScriptAllowed                bool
+	ModulePublishingAllowed      bool
+	InstructionSchedule          []byte
+	NativeSchedule               []byte
+	GlobalMemoryPerByteCost      uint64
+	GlobalMemoryPerByteWriteCost uint64
+	MinTransactionGasUnits       uint64
+	LargeTransactionCutoff       uint64
+	InstrinsicGasPerByte         uint64
+	MaximumNumberOfGasUnits      uint64
+	MinPricePerGasUnit           uint64
+	MaxPricePerGasUnit           uint64
+	MaxTransactionSizeInBytes    uint64
+	GasUnitScalingFactor         uint64
+	DefaultAccountSize           uint64
+	VotingDelay                  uint64
+	VotingPeriod                 uint64
+	VotingQuorumRate             uint8
+	MinActionDelay               uint64
+	TransactionTimeout           uint64
 }
 
-func (*ScriptFunctionCall__SetValidatorConfigAndReconfigure) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__InitializeV2) isScriptFunctionCall() {}
 
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by an account with
-// Validator role.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the sending validator account. The account at `operator_account` address must have
-// a Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig`
-// resource published under it. The sending `account` must be a Validator and have a
-// `ValidatorConfig::ValidatorConfig` resource published under it. This script does not emit a
-// `DiemConfig::NewEpochEvent` and no reconfiguration of the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                  |
-// | ------             | ------       | -------------                                                                                |
-// | `account`          | `signer`     | The signer of the sending account of the transaction.                                        |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__SetValidatorOperator struct {
-	OperatorName    []byte
-	OperatorAccount diemtypes.AccountAddress
+type ScriptFunctionCall__Mint struct {
+	Amount serde.Uint128
 }
 
-func (*ScriptFunctionCall__SetValidatorOperator) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__Mint) isScriptFunctionCall() {}
 
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by the Diem Root
-// account as a write set transaction.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the validator `account`. The account at `operator_account` address must have a
-// Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource
-// published under it. The account represented by the `account` signer must be a Validator and
-// have a `ValidatorConfig::ValidatorConfig` resource published under it. No reconfiguration of
-// the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                   |
-// | ------             | ------       | -------------                                                                                 |
-// | `dr_account`       | `signer`     | Signer of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`          | `signer`     | Signer of account specified in the `execute_as` field of the write set transaction.           |
-// | `sliding_nonce`    | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.      |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                              |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator.  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | A `SlidingNonce` resource is not published under `dr_account`.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                        | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                        | The `sliding_nonce` in `dr_account` is too far in the future.                                                                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`               | The `sliding_nonce` in` dr_account` has been previously recorded.                                                                                            |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | The sending account is not the Diem Root account or Treasury Compliance account                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-type ScriptFunctionCall__SetValidatorOperatorWithNonceAdmin struct {
-	SlidingNonce    uint64
-	OperatorName    []byte
-	OperatorAccount diemtypes.AccountAddress
+type ScriptFunctionCall__PeerToPeer struct {
+	TokenType    diemtypes.TypeTag
+	Payee        diemtypes.AccountAddress
+	PayeeAuthKey []byte
+	Amount       serde.Uint128
 }
 
-func (*ScriptFunctionCall__SetValidatorOperatorWithNonceAdmin) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__PeerToPeer) isScriptFunctionCall() {}
 
-// # Summary
-// Mints a specified number of coins in a currency to a Designated Dealer. The sending account
-// must be the Treasury Compliance account, and coins can only be minted to a Designated Dealer
-// account.
-//
-// # Technical Description
-// Mints `mint_amount` of coins in the `CoinType` currency to Designated Dealer account at
-// `designated_dealer_address`. The `tier_index` parameter specifies which tier should be used to
-// check verify the off-chain approval policy, and is based in part on the on-chain tier values
-// for the specific Designated Dealer, and the number of `CoinType` coins that have been minted to
-// the dealer over the past 24 hours. Every Designated Dealer has 4 tiers for each currency that
-// they support. The sending `tc_account` must be the Treasury Compliance account, and the
-// receiver an authorized Designated Dealer account.
-//
-// # Events
-// Successful execution of the transaction will emit two events:
-// * A `Diem::MintEvent` with the amount and currency code minted is emitted on the
-// `mint_event_handle` in the stored `Diem::CurrencyInfo<CoinType>` resource stored under
-// `0xA550C18`; and
-// * A `DesignatedDealer::ReceivedMintEvent` with the amount, currency code, and Designated
-// Dealer's address is emitted on the `mint_event_handle` in the stored `DesignatedDealer::Dealer`
-// resource published under the `designated_dealer_address`.
-//
-// # Parameters
-// | Name                        | Type      | Description                                                                                                |
-// | ------                      | ------    | -------------                                                                                              |
-// | `CoinType`                  | Type      | The Move type for the `CoinType` being minted. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`                | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account.            |
-// | `sliding_nonce`             | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                 |
-// | `designated_dealer_address` | `address` | The address of the Designated Dealer account being minted to.                                              |
-// | `mint_amount`               | `u64`     | The number of coins to be minted.                                                                          |
-// | `tier_index`                | `u64`     | [Deprecated] The mint tier index to use for the Designated Dealer account. Will be ignored                 |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                 | Description                                                                                                                  |
-// | ----------------              | --------------                               | -------------                                                                                                                |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                                                               |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                   |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                            |
-// | `Errors::REQUIRES_ADDRESS`    | `CoreAddresses::ETREASURY_COMPLIANCE`        | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::REQUIRES_ROLE`       | `Roles::ETREASURY_COMPLIANCE`                | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_MINT_AMOUNT`     | `mint_amount` is zero.                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `DesignatedDealer::EDEALER`                  | `DesignatedDealer::Dealer` or `DesignatedDealer::TierInfo<CoinType>` resource does not exist at `designated_dealer_address`. |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EMINT_CAPABILITY`                    | `tc_account` does not have a `Diem::MintCapability<CoinType>` resource published under it.                                  |
-// | `Errors::INVALID_STATE`       | `Diem::EMINTING_NOT_ALLOWED`                | Minting is not currently allowed for `CoinType` coins.                                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`      | The depositing of the funds would exceed the `account`'s account limits.                                                     |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_designated_dealer`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-type ScriptFunctionCall__TieredMint struct {
-	CoinType                diemtypes.TypeTag
-	SlidingNonce            uint64
-	DesignatedDealerAddress diemtypes.AccountAddress
-	MintAmount              uint64
-	TierIndex               uint64
+type ScriptFunctionCall__PeerToPeerBatch struct {
+	TokenType     diemtypes.TypeTag
+	Payeees       []byte
+	PayeeAuthKeys []byte
+	Amount        serde.Uint128
 }
 
-func (*ScriptFunctionCall__TieredMint) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__PeerToPeerBatch) isScriptFunctionCall() {}
 
-// # Summary
-// Unfreezes the account at `address`. The sending account of this transaction must be the
-// Treasury Compliance account. After the successful execution of this transaction transactions
-// may be sent from the previously frozen account, and coins may be sent and received.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `false` and emits a
-// `AccountFreezing::UnFreezeAccountEvent`. The transaction sender must be the Treasury Compliance
-// account. Note that this is a per-account property so unfreezing a Parent VASP will not effect
-// the status any of its child accounts and vice versa.
-//
-// # Events
-// Successful execution of this script will emit a `AccountFreezing::UnFreezeAccountEvent` with
-// the `unfrozen_address` set the `to_unfreeze_account`'s address.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                     |
-// | ------                | ------    | -------------                                                                                   |
-// | `tc_account`          | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `to_unfreeze_account` | `address` | The account address to be frozen.                                                               |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::freeze_account`
-type ScriptFunctionCall__UnfreezeAccount struct {
-	SlidingNonce      uint64
-	ToUnfreezeAccount diemtypes.AccountAddress
+type ScriptFunctionCall__PeerToPeerV2 struct {
+	TokenType diemtypes.TypeTag
+	Payee     diemtypes.AccountAddress
+	Amount    serde.Uint128
 }
 
-func (*ScriptFunctionCall__UnfreezeAccount) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__PeerToPeerV2) isScriptFunctionCall() {}
 
-// # Summary
-// Updates the Diem consensus config that is stored on-chain and is used by the Consensus.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemConsensusConfig` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system.
-//
-// # Parameters
-// | Name            | Type          | Description                                                                |
-// | ------          | ------        | -------------                                                              |
-// | `account`       | `signer`      | Signer of the sending account. Must be the Diem Root account.              |
-// | `sliding_nonce` | `u64`         | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `config`        | `vector<u8>`  | The serialized bytes of consensus config.                                  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-type ScriptFunctionCall__UpdateDiemConsensusConfig struct {
-	SlidingNonce uint64
-	Config       []byte
+type ScriptFunctionCall__PeerToPeerWithMetadata struct {
+	TokenType    diemtypes.TypeTag
+	Payee        diemtypes.AccountAddress
+	PayeeAuthKey []byte
+	Amount       serde.Uint128
+	Metadata     []byte
 }
 
-func (*ScriptFunctionCall__UpdateDiemConsensusConfig) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__PeerToPeerWithMetadata) isScriptFunctionCall() {}
 
-// # Summary
-// Updates the Diem major version that is stored on-chain and is used by the VM.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemVersion` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system. The `major` version that is passed in must be strictly greater
-// than the current major version held on-chain. The VM reads this information and can use it to
-// preserve backwards compatibility with previous major versions of the VM.
-//
-// # Parameters
-// | Name            | Type     | Description                                                                |
-// | ------          | ------   | -------------                                                              |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.              |
-// | `sliding_nonce` | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `major`         | `u64`    | The `major` version of the VM to be used from this transaction on.         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-// | `Errors::INVALID_ARGUMENT` | `DiemVersion::EINVALID_MAJOR_VERSION_NUMBER`  | `major` is less-than or equal to the current major version stored on-chain.                |
-type ScriptFunctionCall__UpdateDiemVersion struct {
-	SlidingNonce uint64
-	Major        uint64
+type ScriptFunctionCall__PeerToPeerWithMetadataV2 struct {
+	TokenType diemtypes.TypeTag
+	Payee     diemtypes.AccountAddress
+	Amount    serde.Uint128
+	Metadata  []byte
 }
 
-func (*ScriptFunctionCall__UpdateDiemVersion) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__PeerToPeerWithMetadataV2) isScriptFunctionCall() {}
 
-// # Summary
-// Update the dual attestation limit on-chain. Defined in terms of micro-XDX.  The transaction can
-// only be sent by the Treasury Compliance account.  After this transaction all inter-VASP
-// payments over this limit must be checked for dual attestation.
-//
-// # Technical Description
-// Updates the `micro_xdx_limit` field of the `DualAttestation::Limit` resource published under
-// `0xA550C18`. The amount is set in micro-XDX.
-//
-// # Parameters
-// | Name                  | Type     | Description                                                                                     |
-// | ------                | ------   | -------------                                                                                   |
-// | `tc_account`          | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_micro_xdx_limit` | `u64`    | The new dual attestation limit to be used on-chain.                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_exchange_rate`
-// * `TreasuryComplianceScripts::update_minting_ability`
-type ScriptFunctionCall__UpdateDualAttestationLimit struct {
-	SlidingNonce     uint64
-	NewMicroXdxLimit uint64
+// Entrypoint for the proposal.
+type ScriptFunctionCall__Propose struct {
+	TokenT           diemtypes.TypeTag
+	VotingDelay      uint64
+	VotingPeriod     uint64
+	VotingQuorumRate uint8
+	MinActionDelay   uint64
+	ExecDelay        uint64
 }
 
-func (*ScriptFunctionCall__UpdateDualAttestationLimit) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__Propose) isScriptFunctionCall() {}
 
-// # Summary
-// Update the rough on-chain exchange rate between a specified currency and XDX (as a conversion
-// to micro-XDX). The transaction can only be sent by the Treasury Compliance account. After this
-// transaction the updated exchange rate will be used for normalization of gas prices, and for
-// dual attestation checking.
-//
-// # Technical Description
-// Updates the on-chain exchange rate from the given `Currency` to micro-XDX.  The exchange rate
-// is given by `new_exchange_rate_numerator/new_exchange_rate_denominator`.
-//
-// # Parameters
-// | Name                            | Type     | Description                                                                                                                        |
-// | ------                          | ------   | -------------                                                                                                                      |
-// | `Currency`                      | Type     | The Move type for the `Currency` whose exchange rate is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`                    | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                    |
-// | `sliding_nonce`                 | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for the transaction.                                                          |
-// | `new_exchange_rate_numerator`   | `u64`    | The numerator for the new to micro-XDX exchange rate for `Currency`.                                                               |
-// | `new_exchange_rate_denominator` | `u64`    | The denominator for the new to micro-XDX exchange rate for `Currency`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`           | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::EDENOMINATOR`            | `new_exchange_rate_denominator` is zero.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_dual_attestation_limit`
-// * `TreasuryComplianceScripts::update_minting_ability`
-type ScriptFunctionCall__UpdateExchangeRate struct {
-	Currency                   diemtypes.TypeTag
-	SlidingNonce               uint64
-	NewExchangeRateNumerator   uint64
-	NewExchangeRateDenominator uint64
+type ScriptFunctionCall__ProposeModuleUpgradeV2 struct {
+	Token         diemtypes.TypeTag
+	ModuleAddress diemtypes.AccountAddress
+	PackageHash   []byte
+	Version       uint64
+	ExecDelay     uint64
+	Enforced      bool
 }
 
-func (*ScriptFunctionCall__UpdateExchangeRate) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ProposeModuleUpgradeV2) isScriptFunctionCall() {}
 
-// # Summary
-// Script to allow or disallow minting of new coins in a specified currency.  This transaction can
-// only be sent by the Treasury Compliance account.  Turning minting off for a currency will have
-// no effect on coins already in circulation, and coins may still be removed from the system.
-//
-// # Technical Description
-// This transaction sets the `can_mint` field of the `Diem::CurrencyInfo<Currency>` resource
-// published under `0xA550C18` to the value of `allow_minting`. Minting of coins if allowed if
-// this field is set to `true` and minting of new coins in `Currency` is disallowed otherwise.
-// This transaction needs to be sent by the Treasury Compliance account.
-//
-// # Parameters
-// | Name            | Type     | Description                                                                                                                          |
-// | ------          | ------   | -------------                                                                                                                        |
-// | `Currency`      | Type     | The Move type for the `Currency` whose minting ability is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.                                                                        |
-// | `allow_minting` | `bool`   | Whether to allow minting of new coins in `Currency`.                                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                          |
-// | ----------------           | --------------                        | -------------                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | `tc_account` is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `Diem::ECURRENCY_INFO`               | `Currency` is not a registered currency on-chain.    |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_dual_attestation_limit`
-// * `TreasuryComplianceScripts::update_exchange_rate`
-type ScriptFunctionCall__UpdateMintingAbility struct {
-	Currency     diemtypes.TypeTag
-	AllowMinting bool
+type ScriptFunctionCall__ProposeUpdateConsensusConfig struct {
+	UncleRateTarget           uint64
+	BaseBlockTimeTarget       uint64
+	BaseRewardPerBlock        serde.Uint128
+	BaseRewardPerUnclePercent uint64
+	EpochBlockCount           uint64
+	BaseBlockDifficultyWindow uint64
+	MinBlockTimeTarget        uint64
+	MaxBlockTimeTarget        uint64
+	BaseMaxUnclesPerBlock     uint64
+	BaseBlockGasLimit         uint64
+	Strategy                  uint8
+	ExecDelay                 uint64
 }
 
-func (*ScriptFunctionCall__UpdateMintingAbility) isScriptFunctionCall() {}
+func (*ScriptFunctionCall__ProposeUpdateConsensusConfig) isScriptFunctionCall() {}
 
-// Build a Diem `Script` from a structured object `ScriptCall`.
-func EncodeScript(call ScriptCall) diemtypes.Script {
-	switch call := call.(type) {
-	case *ScriptCall__AddCurrencyToAccount:
-		return EncodeAddCurrencyToAccountScript(call.Currency)
-	case *ScriptCall__AddRecoveryRotationCapability:
-		return EncodeAddRecoveryRotationCapabilityScript(call.RecoveryAddress)
-	case *ScriptCall__AddValidatorAndReconfigure:
-		return EncodeAddValidatorAndReconfigureScript(call.SlidingNonce, call.ValidatorName, call.ValidatorAddress)
-	case *ScriptCall__Burn:
-		return EncodeBurnScript(call.Token, call.SlidingNonce, call.PreburnAddress)
-	case *ScriptCall__BurnTxnFees:
-		return EncodeBurnTxnFeesScript(call.CoinType)
-	case *ScriptCall__CancelBurn:
-		return EncodeCancelBurnScript(call.Token, call.PreburnAddress)
-	case *ScriptCall__CreateChildVaspAccount:
-		return EncodeCreateChildVaspAccountScript(call.CoinType, call.ChildAddress, call.AuthKeyPrefix, call.AddAllCurrencies, call.ChildInitialBalance)
-	case *ScriptCall__CreateDesignatedDealer:
-		return EncodeCreateDesignatedDealerScript(call.Currency, call.SlidingNonce, call.Addr, call.AuthKeyPrefix, call.HumanName, call.AddAllCurrencies)
-	case *ScriptCall__CreateParentVaspAccount:
-		return EncodeCreateParentVaspAccountScript(call.CoinType, call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName, call.AddAllCurrencies)
-	case *ScriptCall__CreateRecoveryAddress:
-		return EncodeCreateRecoveryAddressScript()
-	case *ScriptCall__CreateValidatorAccount:
-		return EncodeCreateValidatorAccountScript(call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName)
-	case *ScriptCall__CreateValidatorOperatorAccount:
-		return EncodeCreateValidatorOperatorAccountScript(call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName)
-	case *ScriptCall__FreezeAccount:
-		return EncodeFreezeAccountScript(call.SlidingNonce, call.ToFreezeAccount)
-	case *ScriptCall__PeerToPeerWithMetadata:
-		return EncodePeerToPeerWithMetadataScript(call.Currency, call.Payee, call.Amount, call.Metadata, call.MetadataSignature)
-	case *ScriptCall__Preburn:
-		return EncodePreburnScript(call.Token, call.Amount)
-	case *ScriptCall__PublishSharedEd25519PublicKey:
-		return EncodePublishSharedEd25519PublicKeyScript(call.PublicKey)
-	case *ScriptCall__RegisterValidatorConfig:
-		return EncodeRegisterValidatorConfigScript(call.ValidatorAccount, call.ConsensusPubkey, call.ValidatorNetworkAddresses, call.FullnodeNetworkAddresses)
-	case *ScriptCall__RemoveValidatorAndReconfigure:
-		return EncodeRemoveValidatorAndReconfigureScript(call.SlidingNonce, call.ValidatorName, call.ValidatorAddress)
-	case *ScriptCall__RotateAuthenticationKey:
-		return EncodeRotateAuthenticationKeyScript(call.NewKey)
-	case *ScriptCall__RotateAuthenticationKeyWithNonce:
-		return EncodeRotateAuthenticationKeyWithNonceScript(call.SlidingNonce, call.NewKey)
-	case *ScriptCall__RotateAuthenticationKeyWithNonceAdmin:
-		return EncodeRotateAuthenticationKeyWithNonceAdminScript(call.SlidingNonce, call.NewKey)
-	case *ScriptCall__RotateAuthenticationKeyWithRecoveryAddress:
-		return EncodeRotateAuthenticationKeyWithRecoveryAddressScript(call.RecoveryAddress, call.ToRecover, call.NewKey)
-	case *ScriptCall__RotateDualAttestationInfo:
-		return EncodeRotateDualAttestationInfoScript(call.NewUrl, call.NewKey)
-	case *ScriptCall__RotateSharedEd25519PublicKey:
-		return EncodeRotateSharedEd25519PublicKeyScript(call.PublicKey)
-	case *ScriptCall__SetValidatorConfigAndReconfigure:
-		return EncodeSetValidatorConfigAndReconfigureScript(call.ValidatorAccount, call.ConsensusPubkey, call.ValidatorNetworkAddresses, call.FullnodeNetworkAddresses)
-	case *ScriptCall__SetValidatorOperator:
-		return EncodeSetValidatorOperatorScript(call.OperatorName, call.OperatorAccount)
-	case *ScriptCall__SetValidatorOperatorWithNonceAdmin:
-		return EncodeSetValidatorOperatorWithNonceAdminScript(call.SlidingNonce, call.OperatorName, call.OperatorAccount)
-	case *ScriptCall__TieredMint:
-		return EncodeTieredMintScript(call.CoinType, call.SlidingNonce, call.DesignatedDealerAddress, call.MintAmount, call.TierIndex)
-	case *ScriptCall__UnfreezeAccount:
-		return EncodeUnfreezeAccountScript(call.SlidingNonce, call.ToUnfreezeAccount)
-	case *ScriptCall__UpdateDiemVersion:
-		return EncodeUpdateDiemVersionScript(call.SlidingNonce, call.Major)
-	case *ScriptCall__UpdateDualAttestationLimit:
-		return EncodeUpdateDualAttestationLimitScript(call.SlidingNonce, call.NewMicroXdxLimit)
-	case *ScriptCall__UpdateExchangeRate:
-		return EncodeUpdateExchangeRateScript(call.Currency, call.SlidingNonce, call.NewExchangeRateNumerator, call.NewExchangeRateDenominator)
-	case *ScriptCall__UpdateMintingAbility:
-		return EncodeUpdateMintingAbilityScript(call.Currency, call.AllowMinting)
-	}
-	panic("unreachable")
+type ScriptFunctionCall__ProposeUpdateMoveLanguageVersion struct {
+	NewVersion uint64
+	ExecDelay  uint64
 }
+
+func (*ScriptFunctionCall__ProposeUpdateMoveLanguageVersion) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__ProposeUpdateRewardConfig struct {
+	RewardDelay uint64
+	ExecDelay   uint64
+}
+
+func (*ScriptFunctionCall__ProposeUpdateRewardConfig) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__ProposeUpdateTxnPublishOption struct {
+	ScriptAllowed           bool
+	ModulePublishingAllowed bool
+	ExecDelay               uint64
+}
+
+func (*ScriptFunctionCall__ProposeUpdateTxnPublishOption) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__ProposeUpdateTxnTimeoutConfig struct {
+	DurationSeconds uint64
+	ExecDelay       uint64
+}
+
+func (*ScriptFunctionCall__ProposeUpdateTxnTimeoutConfig) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__ProposeUpdateVmConfig struct {
+	InstructionSchedule          []byte
+	NativeSchedule               []byte
+	GlobalMemoryPerByteCost      uint64
+	GlobalMemoryPerByteWriteCost uint64
+	MinTransactionGasUnits       uint64
+	LargeTransactionCutoff       uint64
+	InstrinsicGasPerByte         uint64
+	MaximumNumberOfGasUnits      uint64
+	MinPricePerGasUnit           uint64
+	MaxPricePerGasUnit           uint64
+	MaxTransactionSizeInBytes    uint64
+	GasUnitScalingFactor         uint64
+	DefaultAccountSize           uint64
+	ExecDelay                    uint64
+}
+
+func (*ScriptFunctionCall__ProposeUpdateVmConfig) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__ProposeWithdraw struct {
+	TokenT    diemtypes.TypeTag
+	Receiver  diemtypes.AccountAddress
+	Amount    serde.Uint128
+	Period    uint64
+	ExecDelay uint64
+}
+
+func (*ScriptFunctionCall__ProposeWithdraw) isScriptFunctionCall() {}
+
+// queue agreed proposal to execute.
+type ScriptFunctionCall__QueueProposalAction struct {
+	TokenT          diemtypes.TypeTag
+	ActionT         diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+}
+
+func (*ScriptFunctionCall__QueueProposalAction) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__RegisterOracle struct {
+	OracleT   diemtypes.TypeTag
+	Precision uint8
+}
+
+func (*ScriptFunctionCall__RegisterOracle) isScriptFunctionCall() {}
+
+// revoke all votes on a proposal
+type ScriptFunctionCall__RevokeVote struct {
+	Token           diemtypes.TypeTag
+	Action          diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+}
+
+func (*ScriptFunctionCall__RevokeVote) isScriptFunctionCall() {}
+
+// revoke some votes on a proposal
+type ScriptFunctionCall__RevokeVoteOfPower struct {
+	Token           diemtypes.TypeTag
+	Action          diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+	Power           serde.Uint128
+}
+
+func (*ScriptFunctionCall__RevokeVoteOfPower) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__RotateAuthenticationKey struct {
+	NewKey []byte
+}
+
+func (*ScriptFunctionCall__RotateAuthenticationKey) isScriptFunctionCall() {}
+
+// a alias of execute_module_upgrade_plan_propose, will deprecated in the future.
+type ScriptFunctionCall__SubmitModuleUpgradePlan struct {
+	Token           diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+}
+
+func (*ScriptFunctionCall__SubmitModuleUpgradePlan) isScriptFunctionCall() {}
+
+// Directly submit a upgrade plan, the `sender`'s module upgrade plan must been PackageTxnManager::STRATEGY_TWO_PHASE and have UpgradePlanCapability
+type ScriptFunctionCall__SubmitUpgradePlan struct {
+	PackageHash []byte
+	Version     uint64
+	Enforced    bool
+}
+
+func (*ScriptFunctionCall__SubmitUpgradePlan) isScriptFunctionCall() {}
+
+// association account should call this script after upgrade from v2 to v3.
+type ScriptFunctionCall__TakeLinearWithdrawCapability struct {
+}
+
+func (*ScriptFunctionCall__TakeLinearWithdrawCapability) isScriptFunctionCall() {}
+
+// Take Offer and put to signer's Collection<Offered>.
+type ScriptFunctionCall__TakeOffer struct {
+	Offered      diemtypes.TypeTag
+	OfferAddress diemtypes.AccountAddress
+}
+
+func (*ScriptFunctionCall__TakeOffer) isScriptFunctionCall() {}
+
+// Transfer NFT<NFTMeta, NFTBody> with `id` from `sender` to `receiver`
+type ScriptFunctionCall__Transfer struct {
+	NftMeta  diemtypes.TypeTag
+	NftBody  diemtypes.TypeTag
+	Id       uint64
+	Receiver diemtypes.AccountAddress
+}
+
+func (*ScriptFunctionCall__Transfer) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__UnstakeVote struct {
+	Token           diemtypes.TypeTag
+	Action          diemtypes.TypeTag
+	ProposerAddress diemtypes.AccountAddress
+	ProposalId      uint64
+}
+
+func (*ScriptFunctionCall__UnstakeVote) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__Update struct {
+	OracleT diemtypes.TypeTag
+	Value   serde.Uint128
+}
+
+func (*ScriptFunctionCall__Update) isScriptFunctionCall() {}
+
+// Update `sender`'s module upgrade strategy to `strategy`
+type ScriptFunctionCall__UpdateModuleUpgradeStrategy struct {
+	Strategy uint8
+}
+
+func (*ScriptFunctionCall__UpdateModuleUpgradeStrategy) isScriptFunctionCall() {}
+
+// Stdlib upgrade script from v2 to v3
+type ScriptFunctionCall__UpgradeFromV2ToV3 struct {
+	TotalStcAmount serde.Uint128
+}
+
+func (*ScriptFunctionCall__UpgradeFromV2ToV3) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__UpgradeFromV5ToV6 struct {
+}
+
+func (*ScriptFunctionCall__UpgradeFromV5ToV6) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__UpgradeFromV6ToV7 struct {
+}
+
+func (*ScriptFunctionCall__UpgradeFromV6ToV7) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__UpgradeFromV7ToV8 struct {
+}
+
+func (*ScriptFunctionCall__UpgradeFromV7ToV8) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__WithdrawAndSplitLtWithdrawCap struct {
+	TokenT     diemtypes.TypeTag
+	ForAddress diemtypes.AccountAddress
+	Amount     serde.Uint128
+	LockPeriod uint64
+}
+
+func (*ScriptFunctionCall__WithdrawAndSplitLtWithdrawCap) isScriptFunctionCall() {}
+
+type ScriptFunctionCall__WithdrawTokenWithLinearWithdrawCapability struct {
+	TokenT diemtypes.TypeTag
+}
+
+func (*ScriptFunctionCall__WithdrawTokenWithLinearWithdrawCapability) isScriptFunctionCall() {}
 
 // Build a Diem `TransactionPayload` from a structured object `ScriptFunctionCall`.
 func EncodeScriptFunction(call ScriptFunctionCall) diemtypes.TransactionPayload {
 	switch call := call.(type) {
-	case *ScriptFunctionCall__AddCurrencyToAccount:
-		return EncodeAddCurrencyToAccountScriptFunction(call.Currency)
-	case *ScriptFunctionCall__AddRecoveryRotationCapability:
-		return EncodeAddRecoveryRotationCapabilityScriptFunction(call.RecoveryAddress)
-	case *ScriptFunctionCall__AddValidatorAndReconfigure:
-		return EncodeAddValidatorAndReconfigureScriptFunction(call.SlidingNonce, call.ValidatorName, call.ValidatorAddress)
-	case *ScriptFunctionCall__AddVaspDomain:
-		return EncodeAddVaspDomainScriptFunction(call.Address, call.Domain)
-	case *ScriptFunctionCall__BurnTxnFees:
-		return EncodeBurnTxnFeesScriptFunction(call.CoinType)
-	case *ScriptFunctionCall__BurnWithAmount:
-		return EncodeBurnWithAmountScriptFunction(call.Token, call.SlidingNonce, call.PreburnAddress, call.Amount)
-	case *ScriptFunctionCall__CancelBurnWithAmount:
-		return EncodeCancelBurnWithAmountScriptFunction(call.Token, call.PreburnAddress, call.Amount)
-	case *ScriptFunctionCall__CreateChildVaspAccount:
-		return EncodeCreateChildVaspAccountScriptFunction(call.CoinType, call.ChildAddress, call.AuthKeyPrefix, call.AddAllCurrencies, call.ChildInitialBalance)
-	case *ScriptFunctionCall__CreateDesignatedDealer:
-		return EncodeCreateDesignatedDealerScriptFunction(call.Currency, call.SlidingNonce, call.Addr, call.AuthKeyPrefix, call.HumanName, call.AddAllCurrencies)
-	case *ScriptFunctionCall__CreateParentVaspAccount:
-		return EncodeCreateParentVaspAccountScriptFunction(call.CoinType, call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName, call.AddAllCurrencies)
-	case *ScriptFunctionCall__CreateRecoveryAddress:
-		return EncodeCreateRecoveryAddressScriptFunction()
-	case *ScriptFunctionCall__CreateValidatorAccount:
-		return EncodeCreateValidatorAccountScriptFunction(call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName)
-	case *ScriptFunctionCall__CreateValidatorOperatorAccount:
-		return EncodeCreateValidatorOperatorAccountScriptFunction(call.SlidingNonce, call.NewAccountAddress, call.AuthKeyPrefix, call.HumanName)
-	case *ScriptFunctionCall__CreateVaspDomains:
-		return EncodeCreateVaspDomainsScriptFunction()
-	case *ScriptFunctionCall__FreezeAccount:
-		return EncodeFreezeAccountScriptFunction(call.SlidingNonce, call.ToFreezeAccount)
-	case *ScriptFunctionCall__InitializeDiemConsensusConfig:
-		return EncodeInitializeDiemConsensusConfigScriptFunction(call.SlidingNonce)
-	case *ScriptFunctionCall__PeerToPeerBySigners:
-		return EncodePeerToPeerBySignersScriptFunction(call.Currency, call.Amount, call.Metadata)
+	case *ScriptFunctionCall__Accept:
+		return EncodeAcceptScriptFunction(call.NftMeta, call.NftBody)
+	case *ScriptFunctionCall__AcceptToken:
+		return EncodeAcceptTokenScriptFunction(call.TokenType)
+	case *ScriptFunctionCall__CancelUpgradePlan:
+		return EncodeCancelUpgradePlanScriptFunction()
+	case *ScriptFunctionCall__CastVote:
+		return EncodeCastVoteScriptFunction(call.Token, call.ActionT, call.ProposerAddress, call.ProposalId, call.Agree, call.Votes)
+	case *ScriptFunctionCall__ConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2:
+		return EncodeConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2ScriptFunction(call.PackageAddress)
+	case *ScriptFunctionCall__CreateAccountWithInitialAmount:
+		return EncodeCreateAccountWithInitialAmountScriptFunction(call.TokenType, call.FreshAddress, call.AuthKey, call.InitialAmount)
+	case *ScriptFunctionCall__CreateAccountWithInitialAmountV2:
+		return EncodeCreateAccountWithInitialAmountV2ScriptFunction(call.TokenType, call.FreshAddress, call.InitialAmount)
+	case *ScriptFunctionCall__DestroyEmpty:
+		return EncodeDestroyEmptyScriptFunction(call.NftMeta, call.NftBody)
+	case *ScriptFunctionCall__DestroyTerminatedProposal:
+		return EncodeDestroyTerminatedProposalScriptFunction(call.TokenT, call.ActionT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__DisableAutoAcceptToken:
+		return EncodeDisableAutoAcceptTokenScriptFunction()
+	case *ScriptFunctionCall__EmptyScript:
+		return EncodeEmptyScriptScriptFunction()
+	case *ScriptFunctionCall__EnableAutoAcceptToken:
+		return EncodeEnableAutoAcceptTokenScriptFunction()
+	case *ScriptFunctionCall__Execute:
+		return EncodeExecuteScriptFunction(call.TokenT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__ExecuteModuleUpgradePlanPropose:
+		return EncodeExecuteModuleUpgradePlanProposeScriptFunction(call.Token, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__ExecuteOnChainConfigProposal:
+		return EncodeExecuteOnChainConfigProposalScriptFunction(call.ConfigT, call.ProposalId)
+	case *ScriptFunctionCall__ExecuteOnChainConfigProposalV2:
+		return EncodeExecuteOnChainConfigProposalV2ScriptFunction(call.TokenType, call.ConfigT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__ExecuteWithdrawProposal:
+		return EncodeExecuteWithdrawProposalScriptFunction(call.TokenT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__FlipVote:
+		return EncodeFlipVoteScriptFunction(call.TokenT, call.ActionT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__InitDataSource:
+		return EncodeInitDataSourceScriptFunction(call.OracleT, call.InitValue)
+	case *ScriptFunctionCall__Initialize:
+		return EncodeInitializeScriptFunction(call.StdlibVersion, call.RewardDelay, call.PreMineStcAmount, call.TimeMintStcAmount, call.TimeMintStcPeriod, call.ParentHash, call.AssociationAuthKey, call.GenesisAuthKey, call.ChainId, call.GenesisTimestamp, call.UncleRateTarget, call.EpochBlockCount, call.BaseBlockTimeTarget, call.BaseBlockDifficultyWindow, call.BaseRewardPerBlock, call.BaseRewardPerUnclePercent, call.MinBlockTimeTarget, call.MaxBlockTimeTarget, call.BaseMaxUnclesPerBlock, call.BaseBlockGasLimit, call.Strategy, call.ScriptAllowed, call.ModulePublishingAllowed, call.InstructionSchedule, call.NativeSchedule, call.GlobalMemoryPerByteCost, call.GlobalMemoryPerByteWriteCost, call.MinTransactionGasUnits, call.LargeTransactionCutoff, call.InstrinsicGasPerByte, call.MaximumNumberOfGasUnits, call.MinPricePerGasUnit, call.MaxPricePerGasUnit, call.MaxTransactionSizeInBytes, call.GasUnitScalingFactor, call.DefaultAccountSize, call.VotingDelay, call.VotingPeriod, call.VotingQuorumRate, call.MinActionDelay, call.TransactionTimeout)
+	case *ScriptFunctionCall__InitializeV2:
+		return EncodeInitializeV2ScriptFunction(call.StdlibVersion, call.RewardDelay, call.TotalStcAmount, call.PreMineStcAmount, call.TimeMintStcAmount, call.TimeMintStcPeriod, call.ParentHash, call.AssociationAuthKey, call.GenesisAuthKey, call.ChainId, call.GenesisTimestamp, call.UncleRateTarget, call.EpochBlockCount, call.BaseBlockTimeTarget, call.BaseBlockDifficultyWindow, call.BaseRewardPerBlock, call.BaseRewardPerUnclePercent, call.MinBlockTimeTarget, call.MaxBlockTimeTarget, call.BaseMaxUnclesPerBlock, call.BaseBlockGasLimit, call.Strategy, call.ScriptAllowed, call.ModulePublishingAllowed, call.InstructionSchedule, call.NativeSchedule, call.GlobalMemoryPerByteCost, call.GlobalMemoryPerByteWriteCost, call.MinTransactionGasUnits, call.LargeTransactionCutoff, call.InstrinsicGasPerByte, call.MaximumNumberOfGasUnits, call.MinPricePerGasUnit, call.MaxPricePerGasUnit, call.MaxTransactionSizeInBytes, call.GasUnitScalingFactor, call.DefaultAccountSize, call.VotingDelay, call.VotingPeriod, call.VotingQuorumRate, call.MinActionDelay, call.TransactionTimeout)
+	case *ScriptFunctionCall__Mint:
+		return EncodeMintScriptFunction(call.Amount)
+	case *ScriptFunctionCall__PeerToPeer:
+		return EncodePeerToPeerScriptFunction(call.TokenType, call.Payee, call.PayeeAuthKey, call.Amount)
+	case *ScriptFunctionCall__PeerToPeerBatch:
+		return EncodePeerToPeerBatchScriptFunction(call.TokenType, call.Payeees, call.PayeeAuthKeys, call.Amount)
+	case *ScriptFunctionCall__PeerToPeerV2:
+		return EncodePeerToPeerV2ScriptFunction(call.TokenType, call.Payee, call.Amount)
 	case *ScriptFunctionCall__PeerToPeerWithMetadata:
-		return EncodePeerToPeerWithMetadataScriptFunction(call.Currency, call.Payee, call.Amount, call.Metadata, call.MetadataSignature)
-	case *ScriptFunctionCall__Preburn:
-		return EncodePreburnScriptFunction(call.Token, call.Amount)
-	case *ScriptFunctionCall__PublishSharedEd25519PublicKey:
-		return EncodePublishSharedEd25519PublicKeyScriptFunction(call.PublicKey)
-	case *ScriptFunctionCall__RegisterValidatorConfig:
-		return EncodeRegisterValidatorConfigScriptFunction(call.ValidatorAccount, call.ConsensusPubkey, call.ValidatorNetworkAddresses, call.FullnodeNetworkAddresses)
-	case *ScriptFunctionCall__RemoveValidatorAndReconfigure:
-		return EncodeRemoveValidatorAndReconfigureScriptFunction(call.SlidingNonce, call.ValidatorName, call.ValidatorAddress)
-	case *ScriptFunctionCall__RemoveVaspDomain:
-		return EncodeRemoveVaspDomainScriptFunction(call.Address, call.Domain)
+		return EncodePeerToPeerWithMetadataScriptFunction(call.TokenType, call.Payee, call.PayeeAuthKey, call.Amount, call.Metadata)
+	case *ScriptFunctionCall__PeerToPeerWithMetadataV2:
+		return EncodePeerToPeerWithMetadataV2ScriptFunction(call.TokenType, call.Payee, call.Amount, call.Metadata)
+	case *ScriptFunctionCall__Propose:
+		return EncodeProposeScriptFunction(call.TokenT, call.VotingDelay, call.VotingPeriod, call.VotingQuorumRate, call.MinActionDelay, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeModuleUpgradeV2:
+		return EncodeProposeModuleUpgradeV2ScriptFunction(call.Token, call.ModuleAddress, call.PackageHash, call.Version, call.ExecDelay, call.Enforced)
+	case *ScriptFunctionCall__ProposeUpdateConsensusConfig:
+		return EncodeProposeUpdateConsensusConfigScriptFunction(call.UncleRateTarget, call.BaseBlockTimeTarget, call.BaseRewardPerBlock, call.BaseRewardPerUnclePercent, call.EpochBlockCount, call.BaseBlockDifficultyWindow, call.MinBlockTimeTarget, call.MaxBlockTimeTarget, call.BaseMaxUnclesPerBlock, call.BaseBlockGasLimit, call.Strategy, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeUpdateMoveLanguageVersion:
+		return EncodeProposeUpdateMoveLanguageVersionScriptFunction(call.NewVersion, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeUpdateRewardConfig:
+		return EncodeProposeUpdateRewardConfigScriptFunction(call.RewardDelay, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeUpdateTxnPublishOption:
+		return EncodeProposeUpdateTxnPublishOptionScriptFunction(call.ScriptAllowed, call.ModulePublishingAllowed, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeUpdateTxnTimeoutConfig:
+		return EncodeProposeUpdateTxnTimeoutConfigScriptFunction(call.DurationSeconds, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeUpdateVmConfig:
+		return EncodeProposeUpdateVmConfigScriptFunction(call.InstructionSchedule, call.NativeSchedule, call.GlobalMemoryPerByteCost, call.GlobalMemoryPerByteWriteCost, call.MinTransactionGasUnits, call.LargeTransactionCutoff, call.InstrinsicGasPerByte, call.MaximumNumberOfGasUnits, call.MinPricePerGasUnit, call.MaxPricePerGasUnit, call.MaxTransactionSizeInBytes, call.GasUnitScalingFactor, call.DefaultAccountSize, call.ExecDelay)
+	case *ScriptFunctionCall__ProposeWithdraw:
+		return EncodeProposeWithdrawScriptFunction(call.TokenT, call.Receiver, call.Amount, call.Period, call.ExecDelay)
+	case *ScriptFunctionCall__QueueProposalAction:
+		return EncodeQueueProposalActionScriptFunction(call.TokenT, call.ActionT, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__RegisterOracle:
+		return EncodeRegisterOracleScriptFunction(call.OracleT, call.Precision)
+	case *ScriptFunctionCall__RevokeVote:
+		return EncodeRevokeVoteScriptFunction(call.Token, call.Action, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__RevokeVoteOfPower:
+		return EncodeRevokeVoteOfPowerScriptFunction(call.Token, call.Action, call.ProposerAddress, call.ProposalId, call.Power)
 	case *ScriptFunctionCall__RotateAuthenticationKey:
 		return EncodeRotateAuthenticationKeyScriptFunction(call.NewKey)
-	case *ScriptFunctionCall__RotateAuthenticationKeyWithNonce:
-		return EncodeRotateAuthenticationKeyWithNonceScriptFunction(call.SlidingNonce, call.NewKey)
-	case *ScriptFunctionCall__RotateAuthenticationKeyWithNonceAdmin:
-		return EncodeRotateAuthenticationKeyWithNonceAdminScriptFunction(call.SlidingNonce, call.NewKey)
-	case *ScriptFunctionCall__RotateAuthenticationKeyWithRecoveryAddress:
-		return EncodeRotateAuthenticationKeyWithRecoveryAddressScriptFunction(call.RecoveryAddress, call.ToRecover, call.NewKey)
-	case *ScriptFunctionCall__RotateDualAttestationInfo:
-		return EncodeRotateDualAttestationInfoScriptFunction(call.NewUrl, call.NewKey)
-	case *ScriptFunctionCall__RotateSharedEd25519PublicKey:
-		return EncodeRotateSharedEd25519PublicKeyScriptFunction(call.PublicKey)
-	case *ScriptFunctionCall__SetGasConstants:
-		return EncodeSetGasConstantsScriptFunction(call.SlidingNonce, call.GlobalMemoryPerByteCost, call.GlobalMemoryPerByteWriteCost, call.MinTransactionGasUnits, call.LargeTransactionCutoff, call.IntrinsicGasPerByte, call.MaximumNumberOfGasUnits, call.MinPricePerGasUnit, call.MaxPricePerGasUnit, call.MaxTransactionSizeInBytes, call.GasUnitScalingFactor, call.DefaultAccountSize)
-	case *ScriptFunctionCall__SetValidatorConfigAndReconfigure:
-		return EncodeSetValidatorConfigAndReconfigureScriptFunction(call.ValidatorAccount, call.ConsensusPubkey, call.ValidatorNetworkAddresses, call.FullnodeNetworkAddresses)
-	case *ScriptFunctionCall__SetValidatorOperator:
-		return EncodeSetValidatorOperatorScriptFunction(call.OperatorName, call.OperatorAccount)
-	case *ScriptFunctionCall__SetValidatorOperatorWithNonceAdmin:
-		return EncodeSetValidatorOperatorWithNonceAdminScriptFunction(call.SlidingNonce, call.OperatorName, call.OperatorAccount)
-	case *ScriptFunctionCall__TieredMint:
-		return EncodeTieredMintScriptFunction(call.CoinType, call.SlidingNonce, call.DesignatedDealerAddress, call.MintAmount, call.TierIndex)
-	case *ScriptFunctionCall__UnfreezeAccount:
-		return EncodeUnfreezeAccountScriptFunction(call.SlidingNonce, call.ToUnfreezeAccount)
-	case *ScriptFunctionCall__UpdateDiemConsensusConfig:
-		return EncodeUpdateDiemConsensusConfigScriptFunction(call.SlidingNonce, call.Config)
-	case *ScriptFunctionCall__UpdateDiemVersion:
-		return EncodeUpdateDiemVersionScriptFunction(call.SlidingNonce, call.Major)
-	case *ScriptFunctionCall__UpdateDualAttestationLimit:
-		return EncodeUpdateDualAttestationLimitScriptFunction(call.SlidingNonce, call.NewMicroXdxLimit)
-	case *ScriptFunctionCall__UpdateExchangeRate:
-		return EncodeUpdateExchangeRateScriptFunction(call.Currency, call.SlidingNonce, call.NewExchangeRateNumerator, call.NewExchangeRateDenominator)
-	case *ScriptFunctionCall__UpdateMintingAbility:
-		return EncodeUpdateMintingAbilityScriptFunction(call.Currency, call.AllowMinting)
+	case *ScriptFunctionCall__SubmitModuleUpgradePlan:
+		return EncodeSubmitModuleUpgradePlanScriptFunction(call.Token, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__SubmitUpgradePlan:
+		return EncodeSubmitUpgradePlanScriptFunction(call.PackageHash, call.Version, call.Enforced)
+	case *ScriptFunctionCall__TakeLinearWithdrawCapability:
+		return EncodeTakeLinearWithdrawCapabilityScriptFunction()
+	case *ScriptFunctionCall__TakeOffer:
+		return EncodeTakeOfferScriptFunction(call.Offered, call.OfferAddress)
+	case *ScriptFunctionCall__Transfer:
+		return EncodeTransferScriptFunction(call.NftMeta, call.NftBody, call.Id, call.Receiver)
+	case *ScriptFunctionCall__UnstakeVote:
+		return EncodeUnstakeVoteScriptFunction(call.Token, call.Action, call.ProposerAddress, call.ProposalId)
+	case *ScriptFunctionCall__Update:
+		return EncodeUpdateScriptFunction(call.OracleT, call.Value)
+	case *ScriptFunctionCall__UpdateModuleUpgradeStrategy:
+		return EncodeUpdateModuleUpgradeStrategyScriptFunction(call.Strategy)
+	case *ScriptFunctionCall__UpgradeFromV2ToV3:
+		return EncodeUpgradeFromV2ToV3ScriptFunction(call.TotalStcAmount)
+	case *ScriptFunctionCall__UpgradeFromV5ToV6:
+		return EncodeUpgradeFromV5ToV6ScriptFunction()
+	case *ScriptFunctionCall__UpgradeFromV6ToV7:
+		return EncodeUpgradeFromV6ToV7ScriptFunction()
+	case *ScriptFunctionCall__UpgradeFromV7ToV8:
+		return EncodeUpgradeFromV7ToV8ScriptFunction()
+	case *ScriptFunctionCall__WithdrawAndSplitLtWithdrawCap:
+		return EncodeWithdrawAndSplitLtWithdrawCapScriptFunction(call.TokenT, call.ForAddress, call.Amount, call.LockPeriod)
+	case *ScriptFunctionCall__WithdrawTokenWithLinearWithdrawCapability:
+		return EncodeWithdrawTokenWithLinearWithdrawCapabilityScriptFunction(call.TokenT)
 	}
 	panic("unreachable")
 }
@@ -3478,3430 +696,652 @@ func DecodeScriptFunctionPayload(script diemtypes.TransactionPayload) (ScriptFun
 	}
 }
 
-// # Summary
-// Adds a zero `Currency` balance to the sending `account`. This will enable `account` to
-// send, receive, and hold `Diem::Diem<Currency>` coins. This transaction can be
-// successfully sent by any account that is allowed to hold balances
-// (e.g., VASP, Designated Dealer).
-//
-// # Technical Description
-// After the successful execution of this transaction the sending account will have a
-// `DiemAccount::Balance<Currency>` resource with zero balance published under it. Only
-// accounts that can hold balances can send this transaction, the sending account cannot
-// already have a `DiemAccount::Balance<Currency>` published under it.
-//
-// # Parameters
-// | Name       | Type      | Description                                                                                                                                         |
-// | ------     | ------    | -------------                                                                                                                                       |
-// | `Currency` | Type      | The Move type for the `Currency` being added to the sending account of the transaction. `Currency` must be an already-registered currency on-chain. |
-// | `account`  | `&signer` | The signer of the sending account of the transaction.                                                                                               |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                             | Description                                                                |
-// | ----------------            | --------------                           | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                  | The `Currency` is not a registered currency on-chain.                      |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EROLE_CANT_STORE_BALANCE` | The sending `account`'s role does not permit balances.                     |
-// | `Errors::ALREADY_PUBLISHED` | `DiemAccount::EADD_EXISTING_CURRENCY`   | A balance for `Currency` is already published under the sending `account`. |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::create_parent_vasp_account`
-// * `Script::peer_to_peer_with_metadata`
-func EncodeAddCurrencyToAccountScript(currency diemtypes.TypeTag) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), add_currency_to_account_code...),
-		TyArgs: []diemtypes.TypeTag{currency},
-		Args:   []diemtypes.TransactionArgument{},
-	}
-}
-
-// # Summary
-// Adds a zero `Currency` balance to the sending `account`. This will enable `account` to
-// send, receive, and hold `Diem::Diem<Currency>` coins. This transaction can be
-// successfully sent by any account that is allowed to hold balances
-// (e.g., VASP, Designated Dealer).
-//
-// # Technical Description
-// After the successful execution of this transaction the sending account will have a
-// `DiemAccount::Balance<Currency>` resource with zero balance published under it. Only
-// accounts that can hold balances can send this transaction, the sending account cannot
-// already have a `DiemAccount::Balance<Currency>` published under it.
-//
-// # Parameters
-// | Name       | Type     | Description                                                                                                                                         |
-// | ------     | ------   | -------------                                                                                                                                       |
-// | `Currency` | Type     | The Move type for the `Currency` being added to the sending account of the transaction. `Currency` must be an already-registered currency on-chain. |
-// | `account`  | `signer` | The signer of the sending account of the transaction.                                                                                               |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                             | Description                                                                |
-// | ----------------            | --------------                           | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                  | The `Currency` is not a registered currency on-chain.                      |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EROLE_CANT_STORE_BALANCE` | The sending `account`'s role does not permit balances.                     |
-// | `Errors::ALREADY_PUBLISHED` | `DiemAccount::EADD_EXISTING_CURRENCY`   | A balance for `Currency` is already published under the sending `account`. |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-func EncodeAddCurrencyToAccountScriptFunction(currency diemtypes.TypeTag) diemtypes.TransactionPayload {
+// Init a  NFTGallery for accept NFT<NFTMeta, NFTBody>
+func EncodeAcceptScriptFunction(nft_meta diemtypes.TypeTag, nft_body diemtypes.TypeTag) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "add_currency_to_account",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "NFTGalleryScripts"},
+			Function: "accept",
+			TyArgs:   []diemtypes.TypeTag{nft_meta, nft_body},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Stores the sending accounts ability to rotate its authentication key with a designated recovery
-// account. Both the sending and recovery accounts need to belong to the same VASP and
-// both be VASP accounts. After this transaction both the sending account and the
-// specified recovery account can rotate the sender account's authentication key.
-//
-// # Technical Description
-// Adds the `DiemAccount::KeyRotationCapability` for the sending account
-// (`to_recover_account`) to the `RecoveryAddress::RecoveryAddress` resource under
-// `recovery_address`. After this transaction has been executed successfully the account at
-// `recovery_address` and the `to_recover_account` may rotate the authentication key of
-// `to_recover_account` (the sender of this transaction).
-//
-// The sending account of this transaction (`to_recover_account`) must not have previously given away its unique key
-// rotation capability, and must be a VASP account. The account at `recovery_address`
-// must also be a VASP account belonging to the same VASP as the `to_recover_account`.
-// Additionally the account at `recovery_address` must have already initialized itself as
-// a recovery account address using the `Script::create_recovery_address` transaction script.
-//
-// The sending account's (`to_recover_account`) key rotation capability is
-// removed in this transaction and stored in the `RecoveryAddress::RecoveryAddress`
-// resource stored under the account at `recovery_address`.
-//
-// # Parameters
-// | Name                 | Type      | Description                                                                                                |
-// | ------               | ------    | -------------                                                                                              |
-// | `to_recover_account` | `&signer` | The signer reference of the sending account of this transaction.                                           |
-// | `recovery_address`   | `address` | The account address where the `to_recover_account`'s `DiemAccount::KeyRotationCapability` will be stored. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                       |
-// | ----------------           | --------------                                            | -------------                                                                                     |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `to_recover_account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.    |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`                      | `recovery_address` does not have a `RecoveryAddress` resource published under it.                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EINVALID_KEY_ROTATION_DELEGATION`       | `to_recover_account` and `recovery_address` do not belong to the same VASP.                       |
-// | `Errors::LIMIT_EXCEEDED`   | ` RecoveryAddress::EMAX_KEYS_REGISTERED`                  | `RecoveryAddress::MAX_REGISTERED_KEYS` have already been registered with this `recovery_address`. |
-//
-// # Related Scripts
-// * `Script::create_recovery_address`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeAddRecoveryRotationCapabilityScript(recovery_address diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), add_recovery_rotation_capability_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{recovery_address}},
+func EncodeAcceptTokenScriptFunction(token_type diemtypes.TypeTag) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Account"},
+			Function: "accept_token",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{},
+		},
 	}
 }
 
-// # Summary
-// Stores the sending accounts ability to rotate its authentication key with a designated recovery
-// account. Both the sending and recovery accounts need to belong to the same VASP and
-// both be VASP accounts. After this transaction both the sending account and the
-// specified recovery account can rotate the sender account's authentication key.
-//
-// # Technical Description
-// Adds the `DiemAccount::KeyRotationCapability` for the sending account
-// (`to_recover_account`) to the `RecoveryAddress::RecoveryAddress` resource under
-// `recovery_address`. After this transaction has been executed successfully the account at
-// `recovery_address` and the `to_recover_account` may rotate the authentication key of
-// `to_recover_account` (the sender of this transaction).
-//
-// The sending account of this transaction (`to_recover_account`) must not have previously given away its unique key
-// rotation capability, and must be a VASP account. The account at `recovery_address`
-// must also be a VASP account belonging to the same VASP as the `to_recover_account`.
-// Additionally the account at `recovery_address` must have already initialized itself as
-// a recovery account address using the `AccountAdministrationScripts::create_recovery_address` transaction script.
-//
-// The sending account's (`to_recover_account`) key rotation capability is
-// removed in this transaction and stored in the `RecoveryAddress::RecoveryAddress`
-// resource stored under the account at `recovery_address`.
-//
-// # Parameters
-// | Name                 | Type      | Description                                                                                               |
-// | ------               | ------    | -------------                                                                                             |
-// | `to_recover_account` | `signer`  | The signer of the sending account of this transaction.                                                    |
-// | `recovery_address`   | `address` | The account address where the `to_recover_account`'s `DiemAccount::KeyRotationCapability` will be stored. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                       |
-// | ----------------           | --------------                                            | -------------                                                                                     |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `to_recover_account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.    |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`                      | `recovery_address` does not have a `RecoveryAddress` resource published under it.                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EINVALID_KEY_ROTATION_DELEGATION`       | `to_recover_account` and `recovery_address` do not belong to the same VASP.                       |
-// | `Errors::LIMIT_EXCEEDED`   | ` RecoveryAddress::EMAX_KEYS_REGISTERED`                  | `RecoveryAddress::MAX_REGISTERED_KEYS` have already been registered with this `recovery_address`. |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::create_recovery_address`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-func EncodeAddRecoveryRotationCapabilityScriptFunction(recovery_address diemtypes.AccountAddress) diemtypes.TransactionPayload {
+// Cancel current upgrade plan, the `sender` must have `UpgradePlanCapability`.
+func EncodeCancelUpgradePlanScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "add_recovery_rotation_capability",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "cancel_upgrade_plan",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(recovery_address)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Adds a validator account to the validator set, and triggers a
-// reconfiguration of the system to admit the account to the validator set for the system. This
-// transaction can only be successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script adds the account at `validator_address` to the validator set.
-// This transaction emits a `DiemConfig::NewEpochEvent` event and triggers a
-// reconfiguration. Once the reconfiguration triggered by this script's
-// execution has been performed, the account at the `validator_address` is
-// considered to be a validator in the network.
-//
-// This transaction script will fail if the `validator_address` address is already in the validator set
-// or does not have a `ValidatorConfig::ValidatorConfig` resource already published under it.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer.                                    |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be added to the validator set.                                                                    |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                                                               |
-// | ----------------           | --------------                                | -------------                                                                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `dr_account`.                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                                                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                                                                         |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | The sending account is not the Diem Root account.                                                                                        |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                          | The sending account is not the Diem Root account.                                                                                        |
-// | 0                          | 0                                             | The provided `validator_name` does not match the already-recorded human name for the validator.                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EINVALID_PROSPECTIVE_VALIDATOR` | The validator to be added does not have a `ValidatorConfig::ValidatorConfig` resource published under it, or its `config` field is empty. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EALREADY_A_VALIDATOR`           | The `validator_address` account is already a registered validator.                                                                        |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`            | An invalid time value was encountered in reconfiguration. Unlikely to occur.                                                              |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeAddValidatorAndReconfigureScript(sliding_nonce uint64, validator_name []byte, validator_address diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), add_validator_and_reconfigure_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U8Vector)(&validator_name), &diemtypes.TransactionArgument__Address{validator_address}},
+func EncodeCastVoteScriptFunction(token diemtypes.TypeTag, action_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64, agree bool, votes serde.Uint128) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DaoVoteScripts"},
+			Function: "cast_vote",
+			TyArgs:   []diemtypes.TypeTag{token, action_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id), (*diemtypes.TransactionArgument__Bool)(&agree), (*diemtypes.TransactionArgument__U128)(&votes)},
+		},
 	}
 }
 
-// # Summary
-// Adds a validator account to the validator set, and triggers a
-// reconfiguration of the system to admit the account to the validator set for the system. This
-// transaction can only be successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script adds the account at `validator_address` to the validator set.
-// This transaction emits a `DiemConfig::NewEpochEvent` event and triggers a
-// reconfiguration. Once the reconfiguration triggered by this script's
-// execution has been performed, the account at the `validator_address` is
-// considered to be a validator in the network.
-//
-// This transaction script will fail if the `validator_address` address is already in the validator set
-// or does not have a `ValidatorConfig::ValidatorConfig` resource already published under it.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.                                               |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be added to the validator set.                                                                    |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                                                               |
-// | ----------------           | --------------                               | -------------                                                                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `dr_account`.                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                                         |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | The sending account is not the Diem Root account.                                                                                         |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                          | The sending account is not the Diem Root account.                                                                                         |
-// | 0                          | 0                                            | The provided `validator_name` does not match the already-recorded human name for the validator.                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EINVALID_PROSPECTIVE_VALIDATOR` | The validator to be added does not have a `ValidatorConfig::ValidatorConfig` resource published under it, or its `config` field is empty. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::EALREADY_A_VALIDATOR`           | The `validator_address` account is already a registered validator.                                                                        |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`            | An invalid time value was encountered in reconfiguration. Unlikely to occur.                                                              |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemSystem::EMAX_VALIDATORS`                | The validator set is already at its maximum size. The validator could not be added.                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeAddValidatorAndReconfigureScriptFunction(sliding_nonce uint64, validator_name []byte, validator_address diemtypes.AccountAddress) diemtypes.TransactionPayload {
+func EncodeConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2ScriptFunction(package_address diemtypes.AccountAddress) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "add_validator_and_reconfigure",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PackageTxnManager"},
+			Function: "convert_TwoPhaseUpgrade_to_TwoPhaseUpgradeV2",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(validator_name), encode_address_argument(validator_address)},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{package_address}},
 		},
 	}
 }
 
-// # Summary
-// Add a VASP domain to parent VASP account. The transaction can only be sent by
-// the Treasury Compliance account.
-//
-// # Technical Description
-// Adds a `VASPDomain::VASPDomain` to the `domains` field of the `VASPDomain::VASPDomains` resource published under
-// the account at `address`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                     |
-// | ------       | ------       | -------------                                                                                   |
-// | `tc_account` | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `address`    | `address`    | The `address` of the parent VASP account that will have have `domain` added to its domains.     |
-// | `domain`     | `vector<u8>` | The domain to be added.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                             | Description                                                                                                                            |
-// | ----------------           | --------------                           | -------------                                                                                                                          |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`            | The sending account is not the Treasury Compliance account.                                                                            |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`    | `tc_account` is not the Treasury Compliance account.                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAIN_MANAGER`        | The `VASPDomain::VASPDomainManager` resource is not yet published under the Treasury Compliance account.                                 |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAINS_NOT_PUBLISHED` | `address` does not have a `VASPDomain::VASPDomains` resource published under it.                                                         |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EDOMAIN_ALREADY_EXISTS`         | The `domain` already exists in the list of `VASPDomain::VASPDomain`s  in the `VASPDomain::VASPDomains` resource published under `address`. |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EINVALID_VASP_DOMAIN`        | The `domain` is greater in length than `VASPDomain::DOMAIN_LENGTH`.                                                                        |
-func EncodeAddVaspDomainScriptFunction(address diemtypes.AccountAddress, domain []byte) diemtypes.TransactionPayload {
+func EncodeCreateAccountWithInitialAmountScriptFunction(token_type diemtypes.TypeTag, fresh_address diemtypes.AccountAddress, _auth_key []byte, initial_amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "add_vasp_domain",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Account"},
+			Function: "create_account_with_initial_amount",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{fresh_address}, (*diemtypes.TransactionArgument__U8Vector)(&_auth_key), (*diemtypes.TransactionArgument__U128)(&initial_amount)},
+		},
+	}
+}
+
+func EncodeCreateAccountWithInitialAmountV2ScriptFunction(token_type diemtypes.TypeTag, fresh_address diemtypes.AccountAddress, initial_amount serde.Uint128) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Account"},
+			Function: "create_account_with_initial_amount_v2",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{fresh_address}, (*diemtypes.TransactionArgument__U128)(&initial_amount)},
+		},
+	}
+}
+
+// Destroy empty IdentifierNFT
+func EncodeDestroyEmptyScriptFunction(nft_meta diemtypes.TypeTag, nft_body diemtypes.TypeTag) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "IdentifierNFTScripts"},
+			Function: "destroy_empty",
+			TyArgs:   []diemtypes.TypeTag{nft_meta, nft_body},
+			Args:     []diemtypes.TransactionArgument{},
+		},
+	}
+}
+
+// remove terminated proposal from proposer
+func EncodeDestroyTerminatedProposalScriptFunction(token_t diemtypes.TypeTag, action_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Dao"},
+			Function: "destroy_terminated_proposal",
+			TyArgs:   []diemtypes.TypeTag{token_t, action_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
+	}
+}
+
+// Disable account's auto-accept-token feature.
+// The script function is reenterable.
+func EncodeDisableAutoAcceptTokenScriptFunction() diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountScripts"},
+			Function: "disable_auto_accept_token",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(address), encode_u8vector_argument(domain)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Burns all coins held in the preburn resource at the specified
-// preburn address and removes them from the system. The sending account must
-// be the Treasury Compliance account.
-// The account that holds the preburn resource will normally be a Designated
-// Dealer, but there are no enforced requirements that it be one.
-//
-// # Technical Description
-// This transaction permanently destroys all the coins of `Token` type
-// stored in the `Diem::Preburn<Token>` resource published under the
-// `preburn_address` account address.
-//
-// This transaction will only succeed if the sending `account` has a
-// `Diem::BurnCapability<Token>`, and a `Diem::Preburn<Token>` resource
-// exists under `preburn_address`, with a non-zero `to_burn` field. After the successful execution
-// of this transaction the `total_value` field in the
-// `Diem::CurrencyInfo<Token>` resource published under `0xA550C18` will be
-// decremented by the value of the `to_burn` field of the preburn resource
-// under `preburn_address` immediately before this transaction, and the
-// `to_burn` field of the preburn resource will have a zero value.
-//
-// ## Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<Token>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                  |
-// | ------            | ------    | -------------                                                                                                                |
-// | `Token`           | Type      | The Move type for the `Token` currency being burned. `Token` must be an already-registered currency on-chain.                |
-// | `tc_account`      | `&signer` | The signer reference of the sending account of this transaction, must have a burn capability for `Token` published under it. |
-// | `sliding_nonce`   | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                   |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                            | Description                                                                                           |
-// | ----------------              | --------------                          | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                           |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.            |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                                     |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`               | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.              |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN`                       | The account at `preburn_address` does not have a `Diem::Preburn<Token>` resource published under it. |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_EMPTY`                 | The `Diem::Preburn<Token>` resource is empty (has a value of 0).                                     |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                 | The specified `Token` is not a registered currency on-chain.                                          |
-//
-// # Related Scripts
-// * `Script::burn_txn_fees`
-// * `Script::cancel_burn`
-// * `Script::preburn`
-func EncodeBurnScript(token diemtypes.TypeTag, sliding_nonce uint64, preburn_address diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), burn_code...),
-		TyArgs: []diemtypes.TypeTag{token},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{preburn_address}},
-	}
-}
-
-// # Summary
-// Burns the transaction fees collected in the `CoinType` currency so that the
-// Diem association may reclaim the backing coins off-chain. May only be sent
-// by the Treasury Compliance account.
-//
-// # Technical Description
-// Burns the transaction fees collected in `CoinType` so that the
-// association may reclaim the backing coins. Once this transaction has executed
-// successfully all transaction fees that will have been collected in
-// `CoinType` since the last time this script was called with that specific
-// currency. Both `balance` and `preburn` fields in the
-// `TransactionFee::TransactionFee<CoinType>` resource published under the `0xB1E55ED`
-// account address will have a value of 0 after the successful execution of this script.
-//
-// ## Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<CoinType>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name         | Type      | Description                                                                                                                                         |
-// | ------       | ------    | -------------                                                                                                                                       |
-// | `CoinType`   | Type      | The Move type for the `CoinType` being added to the sending account of the transaction. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account` | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                                 |
-// | ----------------           | --------------                        | -------------                                               |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | The sending account is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `TransactionFee::ETRANSACTION_FEE`    | `CoinType` is not an accepted transaction fee currency.     |
-// | `Errors::INVALID_ARGUMENT` | `Diem::ECOIN`                        | The collected fees in `CoinType` are zero.                  |
-//
-// # Related Scripts
-// * `Script::burn`
-// * `Script::cancel_burn`
-func EncodeBurnTxnFeesScript(coin_type diemtypes.TypeTag) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), burn_txn_fees_code...),
-		TyArgs: []diemtypes.TypeTag{coin_type},
-		Args:   []diemtypes.TransactionArgument{},
-	}
-}
-
-// # Summary
-// Burns the transaction fees collected in the `CoinType` currency so that the
-// Diem association may reclaim the backing coins off-chain. May only be sent
-// by the Treasury Compliance account.
-//
-// # Technical Description
-// Burns the transaction fees collected in `CoinType` so that the
-// association may reclaim the backing coins. Once this transaction has executed
-// successfully all transaction fees that will have been collected in
-// `CoinType` since the last time this script was called with that specific
-// currency. Both `balance` and `preburn` fields in the
-// `TransactionFee::TransactionFee<CoinType>` resource published under the `0xB1E55ED`
-// account address will have a value of 0 after the successful execution of this script.
-//
-// # Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<CoinType>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name         | Type     | Description                                                                                                                                         |
-// | ------       | ------   | -------------                                                                                                                                       |
-// | `CoinType`   | Type     | The Move type for the `CoinType` being added to the sending account of the transaction. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account` | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                                 |
-// | ----------------           | --------------                        | -------------                                               |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | The sending account is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `TransactionFee::ETRANSACTION_FEE`    | `CoinType` is not an accepted transaction fee currency.     |
-// | `Errors::INVALID_ARGUMENT` | `Diem::ECOIN`                        | The collected fees in `CoinType` are zero.                  |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-func EncodeBurnTxnFeesScriptFunction(coin_type diemtypes.TypeTag) diemtypes.TransactionPayload {
+func EncodeEmptyScriptScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "burn_txn_fees",
-			TyArgs:   []diemtypes.TypeTag{coin_type},
-			Args:     [][]byte{},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "EmptyScripts"},
+			Function: "empty_script",
+			TyArgs:   []diemtypes.TypeTag{},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Burns the coins held in a preburn resource in the preburn queue at the
-// specified preburn address, which are equal to the `amount` specified in the
-// transaction. Finds the first relevant outstanding preburn request with
-// matching amount and removes the contained coins from the system. The sending
-// account must be the Treasury Compliance account.
-// The account that holds the preburn queue resource will normally be a Designated
-// Dealer, but there are no enforced requirements that it be one.
-//
-// # Technical Description
-// This transaction permanently destroys all the coins of `Token` type
-// stored in the `Diem::Preburn<Token>` resource published under the
-// `preburn_address` account address.
-//
-// This transaction will only succeed if the sending `account` has a
-// `Diem::BurnCapability<Token>`, and a `Diem::Preburn<Token>` resource
-// exists under `preburn_address`, with a non-zero `to_burn` field. After the successful execution
-// of this transaction the `total_value` field in the
-// `Diem::CurrencyInfo<Token>` resource published under `0xA550C18` will be
-// decremented by the value of the `to_burn` field of the preburn resource
-// under `preburn_address` immediately before this transaction, and the
-// `to_burn` field of the preburn resource will have a zero value.
-//
-// # Events
-// The successful execution of this transaction will emit a `Diem::BurnEvent` on the event handle
-// held in the `Diem::CurrencyInfo<Token>` resource's `burn_events` published under
-// `0xA550C18`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                        |
-// | ------            | ------    | -------------                                                                                                      |
-// | `Token`           | Type      | The Move type for the `Token` currency being burned. `Token` must be an already-registered currency on-chain.      |
-// | `tc_account`      | `signer`  | The signer of the sending account of this transaction, must have a burn capability for `Token` published under it. |
-// | `sliding_nonce`   | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                         |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                       |
-// | `amount`          | `u64`     | The amount to be burned.                                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                            | Description                                                                                                                         |
-// | ----------------              | --------------                          | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                          |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                                                       |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                                                                   |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.                                             |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_NOT_FOUND`              | The `Diem::PreburnQueue<Token>` resource under `preburn_address` does not contain a preburn request with a value matching `amount`. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN_QUEUE`                  | The account at `preburn_address` does not have a `Diem::PreburnQueue<Token>` resource published under it.                           |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                  | The specified `Token` is not a registered currency on-chain.                                                                        |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_txn_fees`
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-// * `TreasuryComplianceScripts::preburn`
-func EncodeBurnWithAmountScriptFunction(token diemtypes.TypeTag, sliding_nonce uint64, preburn_address diemtypes.AccountAddress, amount uint64) diemtypes.TransactionPayload {
+// Enable account's auto-accept-token feature.
+// The script function is reenterable.
+func EncodeEnableAutoAcceptTokenScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "burn_with_amount",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountScripts"},
+			Function: "enable_auto_accept_token",
+			TyArgs:   []diemtypes.TypeTag{},
+			Args:     []diemtypes.TransactionArgument{},
+		},
+	}
+}
+
+// Once the proposal is agreed, anyone can call the method to make the proposal happen.
+func EncodeExecuteScriptFunction(token_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModifyDaoConfigProposal"},
+			Function: "execute",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
+	}
+}
+
+// Execute module upgrade plan propose by submit module upgrade plan, the propose must been agreed, and anyone can execute this function.
+func EncodeExecuteModuleUpgradePlanProposeScriptFunction(token diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "execute_module_upgrade_plan_propose",
 			TyArgs:   []diemtypes.TypeTag{token},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(preburn_address), encode_u64_argument(amount)},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
 		},
 	}
 }
 
-// # Summary
-// Cancels and returns all coins held in the preburn area under
-// `preburn_address` and returns the funds to the `preburn_address`'s balance.
-// Can only be successfully sent by an account with Treasury Compliance role.
-//
-// # Technical Description
-// Cancels and returns all coins held in the `Diem::Preburn<Token>` resource under the `preburn_address` and
-// return the funds to the `preburn_address` account's `DiemAccount::Balance<Token>`.
-// The transaction must be sent by an `account` with a `Diem::BurnCapability<Token>`
-// resource published under it. The account at `preburn_address` must have a
-// `Diem::Preburn<Token>` resource published under it, and its value must be nonzero. The transaction removes
-// the entire balance held in the `Diem::Preburn<Token>` resource, and returns it back to the account's
-// `DiemAccount::Balance<Token>` under `preburn_address`. Due to this, the account at
-// `preburn_address` must already have a balance in the `Token` currency published
-// before this script is called otherwise the transaction will fail.
-//
-// ## Events
-// The successful execution of this transaction will emit:
-// * A `Diem::CancelBurnEvent` on the event handle held in the `Diem::CurrencyInfo<Token>`
-// resource's `burn_events` published under `0xA550C18`.
-// * A `DiemAccount::ReceivedPaymentEvent` on the `preburn_address`'s
-// `DiemAccount::DiemAccount` `received_events` event handle with both the `payer` and `payee`
-// being `preburn_address`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                          |
-// | ------            | ------    | -------------                                                                                                                        |
-// | `Token`           | Type      | The Move type for the `Token` currenty that burning is being cancelled for. `Token` must be an already-registered currency on-chain. |
-// | `account`         | `&signer` | The signer reference of the sending account of this transaction, must have a burn capability for `Token` published under it.         |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                     | Description                                                                                           |
-// | ----------------              | --------------                                   | -------------                                                                                         |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                        | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.              |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN`                                | The account at `preburn_address` does not have a `Diem::Preburn<Token>` resource published under it. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                          | The specified `Token` is not a registered currency on-chain.                                          |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`            | The value held in the preburn resource was zero.                                                      |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE` | The account at `preburn_address` doesn't have a balance resource for `Token`.                         |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`          | The depositing of the funds held in the prebun area would exceed the `account`'s account limits.      |
-// | `Errors::INVALID_STATE`       | `DualAttestation::EPAYEE_COMPLIANCE_KEY_NOT_SET` | The `account` does not have a compliance key set on it but dual attestion checking was performed.     |
-//
-// # Related Scripts
-// * `Script::burn_txn_fees`
-// * `Script::burn`
-// * `Script::preburn`
-func EncodeCancelBurnScript(token diemtypes.TypeTag, preburn_address diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), cancel_burn_code...),
-		TyArgs: []diemtypes.TypeTag{token},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{preburn_address}},
-	}
-}
-
-// # Summary
-// Cancels and returns the coins held in the preburn area under
-// `preburn_address`, which are equal to the `amount` specified in the transaction. Finds the first preburn
-// resource with the matching amount and returns the funds to the `preburn_address`'s balance.
-// Can only be successfully sent by an account with Treasury Compliance role.
-//
-// # Technical Description
-// Cancels and returns all coins held in the `Diem::Preburn<Token>` resource under the `preburn_address` and
-// return the funds to the `preburn_address` account's `DiemAccount::Balance<Token>`.
-// The transaction must be sent by an `account` with a `Diem::BurnCapability<Token>`
-// resource published under it. The account at `preburn_address` must have a
-// `Diem::Preburn<Token>` resource published under it, and its value must be nonzero. The transaction removes
-// the entire balance held in the `Diem::Preburn<Token>` resource, and returns it back to the account's
-// `DiemAccount::Balance<Token>` under `preburn_address`. Due to this, the account at
-// `preburn_address` must already have a balance in the `Token` currency published
-// before this script is called otherwise the transaction will fail.
-//
-// # Events
-// The successful execution of this transaction will emit:
-// * A `Diem::CancelBurnEvent` on the event handle held in the `Diem::CurrencyInfo<Token>`
-// resource's `burn_events` published under `0xA550C18`.
-// * A `DiemAccount::ReceivedPaymentEvent` on the `preburn_address`'s
-// `DiemAccount::DiemAccount` `received_events` event handle with both the `payer` and `payee`
-// being `preburn_address`.
-//
-// # Parameters
-// | Name              | Type      | Description                                                                                                                          |
-// | ------            | ------    | -------------                                                                                                                        |
-// | `Token`           | Type      | The Move type for the `Token` currenty that burning is being cancelled for. `Token` must be an already-registered currency on-chain. |
-// | `account`         | `signer`  | The signer of the sending account of this transaction, must have a burn capability for `Token` published under it.                   |
-// | `preburn_address` | `address` | The address where the coins to-be-burned are currently held.                                                                         |
-// | `amount`          | `u64`     | The amount to be cancelled.                                                                                                          |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                     | Description                                                                                                                         |
-// | ----------------              | --------------                                   | -------------                                                                                                                       |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EBURN_CAPABILITY`                         | The sending `account` does not have a `Diem::BurnCapability<Token>` published under it.                                             |
-// | `Errors::INVALID_STATE`       | `Diem::EPREBURN_NOT_FOUND`                       | The `Diem::PreburnQueue<Token>` resource under `preburn_address` does not contain a preburn request with a value matching `amount`. |
-// | `Errors::NOT_PUBLISHED`       | `Diem::EPREBURN_QUEUE`                           | The account at `preburn_address` does not have a `Diem::PreburnQueue<Token>` resource published under it.                           |
-// | `Errors::NOT_PUBLISHED`       | `Diem::ECURRENCY_INFO`                           | The specified `Token` is not a registered currency on-chain.                                                                        |
-// | `Errors::INVALID_ARGUMENT`    | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | The account at `preburn_address` doesn't have a balance resource for `Token`.                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | The depositing of the funds held in the prebun area would exceed the `account`'s account limits.                                    |
-// | `Errors::INVALID_STATE`       | `DualAttestation::EPAYEE_COMPLIANCE_KEY_NOT_SET` | The `account` does not have a compliance key set on it but dual attestion checking was performed.                                   |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::burn_txn_fees`
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::preburn`
-func EncodeCancelBurnWithAmountScriptFunction(token diemtypes.TypeTag, preburn_address diemtypes.AccountAddress, amount uint64) diemtypes.TransactionPayload {
+func EncodeExecuteOnChainConfigProposalScriptFunction(config_t diemtypes.TypeTag, proposal_id uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "cancel_burn_with_amount",
-			TyArgs:   []diemtypes.TypeTag{token},
-			Args:     [][]byte{encode_address_argument(preburn_address), encode_u64_argument(amount)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "execute_on_chain_config_proposal",
+			TyArgs:   []diemtypes.TypeTag{config_t},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&proposal_id)},
 		},
 	}
 }
 
-// # Summary
-// Creates a Child VASP account with its parent being the sending account of the transaction.
-// The sender of the transaction must be a Parent VASP account.
-//
-// # Technical Description
-// Creates a `ChildVASP` account for the sender `parent_vasp` at `child_address` with a balance of
-// `child_initial_balance` in `CoinType` and an initial authentication key of
-// `auth_key_prefix | child_address`.
-//
-// If `add_all_currencies` is true, the child address will have a zero balance in all available
-// currencies in the system.
-//
-// The new account will be a child account of the transaction sender, which must be a
-// Parent VASP account. The child account will be recorded against the limit of
-// child accounts of the creating Parent VASP account.
-//
-// ## Events
-// Successful execution with a `child_initial_balance` greater than zero will emit:
-// * A `DiemAccount::SentPaymentEvent` with the `payer` field being the Parent VASP's address,
-// and payee field being `child_address`. This is emitted on the Parent VASP's
-// `DiemAccount::DiemAccount` `sent_events` handle.
-// * A `DiemAccount::ReceivedPaymentEvent` with the  `payer` field being the Parent VASP's address,
-// and payee field being `child_address`. This is emitted on the new Child VASPS's
-// `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                    | Type         | Description                                                                                                                                 |
-// | ------                  | ------       | -------------                                                                                                                               |
-// | `CoinType`              | Type         | The Move type for the `CoinType` that the child account should be created with. `CoinType` must be an already-registered currency on-chain. |
-// | `parent_vasp`           | `&signer`    | The signer reference of the sending account. Must be a Parent VASP account.                                                                 |
-// | `child_address`         | `address`    | Address of the to-be-created Child VASP account.                                                                                            |
-// | `auth_key_prefix`       | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                    |
-// | `add_all_currencies`    | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                  |
-// | `child_initial_balance` | `u64`        | The initial balance in `CoinType` to give the child account when it's created.                                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                             | Description                                                                              |
-// | ----------------            | --------------                                           | -------------                                                                            |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`            | The `auth_key_prefix` was not of length 32.                                              |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`                                    | The sending account wasn't a Parent VASP account.                                        |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                                        | The `child_address` address is already taken.                                            |
-// | `Errors::LIMIT_EXCEEDED`    | `VASP::ETOO_MANY_CHILDREN`                               | The sending account has reached the maximum number of allowed child accounts.            |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                                  | The `CoinType` is not a registered currency on-chain.                                    |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for the sending account has already been extracted.            |
-// | `Errors::NOT_PUBLISHED`     | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | The sending account doesn't have a balance in `CoinType`.                                |
-// | `Errors::LIMIT_EXCEEDED`    | `DiemAccount::EINSUFFICIENT_BALANCE`                    | The sending account doesn't have at least `child_initial_balance` of `CoinType` balance. |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::ECANNOT_CREATE_AT_VM_RESERVED`            | The `child_address` is the reserved address 0x0.                                         |
-//
-// # Related Scripts
-// * `Script::create_parent_vasp_account`
-// * `Script::add_currency_to_account`
-// * `Script::rotate_authentication_key`
-// * `Script::add_recovery_rotation_capability`
-// * `Script::create_recovery_address`
-func EncodeCreateChildVaspAccountScript(coin_type diemtypes.TypeTag, child_address diemtypes.AccountAddress, auth_key_prefix []byte, add_all_currencies bool, child_initial_balance uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_child_vasp_account_code...),
-		TyArgs: []diemtypes.TypeTag{coin_type},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{child_address}, (*diemtypes.TransactionArgument__U8Vector)(&auth_key_prefix), (*diemtypes.TransactionArgument__Bool)(&add_all_currencies), (*diemtypes.TransactionArgument__U64)(&child_initial_balance)},
-	}
-}
-
-// # Summary
-// Creates a Child VASP account with its parent being the sending account of the transaction.
-// The sender of the transaction must be a Parent VASP account.
-//
-// # Technical Description
-// Creates a `ChildVASP` account for the sender `parent_vasp` at `child_address` with a balance of
-// `child_initial_balance` in `CoinType` and an initial authentication key of
-// `auth_key_prefix | child_address`. Authentication key prefixes, and how to construct them from an ed25519 public key is described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// If `add_all_currencies` is true, the child address will have a zero balance in all available
-// currencies in the system.
-//
-// The new account will be a child account of the transaction sender, which must be a
-// Parent VASP account. The child account will be recorded against the limit of
-// child accounts of the creating Parent VASP account.
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `child_address`,
-// and the `rold_id` field being `Roles::CHILD_VASP_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// Successful execution with a `child_initial_balance` greater than zero will additionaly emit:
-// * A `DiemAccount::SentPaymentEvent` with the `payee` field being `child_address`.
-// This is emitted on the Parent VASP's `DiemAccount::DiemAccount` `sent_events` handle.
-// * A `DiemAccount::ReceivedPaymentEvent` with the  `payer` field being the Parent VASP's address.
-// This is emitted on the new Child VASPS's `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                    | Type         | Description                                                                                                                                 |
-// | ------                  | ------       | -------------                                                                                                                               |
-// | `CoinType`              | Type         | The Move type for the `CoinType` that the child account should be created with. `CoinType` must be an already-registered currency on-chain. |
-// | `parent_vasp`           | `signer`     | The reference of the sending account. Must be a Parent VASP account.                                                                        |
-// | `child_address`         | `address`    | Address of the to-be-created Child VASP account.                                                                                            |
-// | `auth_key_prefix`       | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                    |
-// | `add_all_currencies`    | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                  |
-// | `child_initial_balance` | `u64`        | The initial balance in `CoinType` to give the child account when it's created.                                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                             | Description                                                                              |
-// | ----------------            | --------------                                           | -------------                                                                            |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`            | The `auth_key_prefix` was not of length 32.                                              |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`                                    | The sending account wasn't a Parent VASP account.                                        |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                                        | The `child_address` address is already taken.                                            |
-// | `Errors::LIMIT_EXCEEDED`    | `VASP::ETOO_MANY_CHILDREN`                               | The sending account has reached the maximum number of allowed child accounts.            |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                                  | The `CoinType` is not a registered currency on-chain.                                    |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for the sending account has already been extracted.            |
-// | `Errors::NOT_PUBLISHED`     | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | The sending account doesn't have a balance in `CoinType`.                                |
-// | `Errors::LIMIT_EXCEEDED`    | `DiemAccount::EINSUFFICIENT_BALANCE`                    | The sending account doesn't have at least `child_initial_balance` of `CoinType` balance. |
-// | `Errors::INVALID_ARGUMENT`  | `DiemAccount::ECANNOT_CREATE_AT_VM_RESERVED`            | The `child_address` is the reserved address 0x0.                                         |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::add_recovery_rotation_capability`
-// * `AccountAdministrationScripts::create_recovery_address`
-func EncodeCreateChildVaspAccountScriptFunction(coin_type diemtypes.TypeTag, child_address diemtypes.AccountAddress, auth_key_prefix []byte, add_all_currencies bool, child_initial_balance uint64) diemtypes.TransactionPayload {
+func EncodeExecuteOnChainConfigProposalV2ScriptFunction(token_type diemtypes.TypeTag, config_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountCreationScripts"},
-			Function: "create_child_vasp_account",
-			TyArgs:   []diemtypes.TypeTag{coin_type},
-			Args:     [][]byte{encode_address_argument(child_address), encode_u8vector_argument(auth_key_prefix), encode_bool_argument(add_all_currencies), encode_u64_argument(child_initial_balance)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "execute_on_chain_config_proposal_v2",
+			TyArgs:   []diemtypes.TypeTag{token_type, config_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
 		},
 	}
 }
 
-// # Summary
-// Creates a Designated Dealer account with the provided information, and initializes it with
-// default mint tiers. The transaction can only be sent by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Designated Dealer role at `addr` with authentication key
-// `auth_key_prefix` | `addr` and a 0 balance of type `Currency`. If `add_all_currencies` is true,
-// 0 balances for all available currencies in the system will also be added. This can only be
-// invoked by an account with the TreasuryCompliance role.
-//
-// At the time of creation the account is also initialized with default mint tiers of (500_000,
-// 5000_000, 50_000_000, 500_000_000), and preburn areas for each currency that is added to the
-// account.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                                         |
-// | ------               | ------       | -------------                                                                                                                                       |
-// | `Currency`           | Type         | The Move type for the `Currency` that the Designated Dealer should be initialized with. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`         | `&signer`    | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                           |
-// | `sliding_nonce`      | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                          |
-// | `addr`               | `address`    | Address of the to-be-created Designated Dealer account.                                                                                             |
-// | `auth_key_prefix`    | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                            |
-// | `human_name`         | `vector<u8>` | ASCII-encoded human name for the Designated Dealer.                                                                                                 |
-// | `add_all_currencies` | `bool`       | Whether to publish preburn, balance, and tier info resources for all known (SCS) currencies or just `Currency` when the account is created.         |
-//
-
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `Currency` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `addr` address is already taken.                                                       |
-//
-// # Related Scripts
-// * `Script::tiered_mint`
-// * `Script::peer_to_peer_with_metadata`
-// * `Script::rotate_dual_attestation_info`
-func EncodeCreateDesignatedDealerScript(currency diemtypes.TypeTag, sliding_nonce uint64, addr diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte, add_all_currencies bool) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_designated_dealer_code...),
-		TyArgs: []diemtypes.TypeTag{currency},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{addr}, (*diemtypes.TransactionArgument__U8Vector)(&auth_key_prefix), (*diemtypes.TransactionArgument__U8Vector)(&human_name), (*diemtypes.TransactionArgument__Bool)(&add_all_currencies)},
-	}
-}
-
-// # Summary
-// Creates a Designated Dealer account with the provided information, and initializes it with
-// default mint tiers. The transaction can only be sent by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Designated Dealer role at `addr` with authentication key
-// `auth_key_prefix` | `addr` and a 0 balance of type `Currency`. If `add_all_currencies` is true,
-// 0 balances for all available currencies in the system will also be added. This can only be
-// invoked by an account with the TreasuryCompliance role.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// At the time of creation the account is also initialized with default mint tiers of (500_000,
-// 5000_000, 50_000_000, 500_000_000), and preburn areas for each currency that is added to the
-// account.
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `addr`,
-// and the `rold_id` field being `Roles::DESIGNATED_DEALER_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                                         |
-// | ------               | ------       | -------------                                                                                                                                       |
-// | `Currency`           | Type         | The Move type for the `Currency` that the Designated Dealer should be initialized with. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`         | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                     |
-// | `sliding_nonce`      | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                          |
-// | `addr`               | `address`    | Address of the to-be-created Designated Dealer account.                                                                                             |
-// | `auth_key_prefix`    | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                            |
-// | `human_name`         | `vector<u8>` | ASCII-encoded human name for the Designated Dealer.                                                                                                 |
-// | `add_all_currencies` | `bool`       | Whether to publish preburn, balance, and tier info resources for all known (SCS) currencies or just `Currency` when the account is created.         |
-//
-
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `Currency` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `addr` address is already taken.                                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::tiered_mint`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-func EncodeCreateDesignatedDealerScriptFunction(currency diemtypes.TypeTag, sliding_nonce uint64, addr diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte, add_all_currencies bool) diemtypes.TransactionPayload {
+func EncodeExecuteWithdrawProposalScriptFunction(token_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountCreationScripts"},
-			Function: "create_designated_dealer",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(addr), encode_u8vector_argument(auth_key_prefix), encode_u8vector_argument(human_name), encode_bool_argument(add_all_currencies)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryScripts"},
+			Function: "execute_withdraw_proposal",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
 		},
 	}
 }
 
-// # Summary
-// Creates a Parent VASP account with the specified human name. Must be called by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Parent VASP role at `address` with authentication key
-// `auth_key_prefix` | `new_account_address` and a 0 balance of type `CoinType`. If
-// `add_all_currencies` is true, 0 balances for all available currencies in the system will
-// also be added. This can only be invoked by an TreasuryCompliance account.
-// `sliding_nonce` is a unique nonce for operation, see `SlidingNonce` for details.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                                                                                    |
-// | ------                | ------       | -------------                                                                                                                                                  |
-// | `CoinType`            | Type         | The Move type for the `CoinType` currency that the Parent VASP account should be initialized with. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                                                      |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                                     |
-// | `new_account_address` | `address`    | Address of the to-be-created Parent VASP account.                                                                                                              |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                                       |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the Parent VASP.                                                                                                                  |
-// | `add_all_currencies`  | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `CoinType` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::add_currency_to_account`
-// * `Script::rotate_authentication_key`
-// * `Script::add_recovery_rotation_capability`
-// * `Script::create_recovery_address`
-// * `Script::rotate_dual_attestation_info`
-func EncodeCreateParentVaspAccountScript(coin_type diemtypes.TypeTag, sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte, add_all_currencies bool) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_parent_vasp_account_code...),
-		TyArgs: []diemtypes.TypeTag{coin_type},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{new_account_address}, (*diemtypes.TransactionArgument__U8Vector)(&auth_key_prefix), (*diemtypes.TransactionArgument__U8Vector)(&human_name), (*diemtypes.TransactionArgument__Bool)(&add_all_currencies)},
-	}
-}
-
-// # Summary
-// Creates a Parent VASP account with the specified human name. Must be called by the Treasury Compliance account.
-//
-// # Technical Description
-// Creates an account with the Parent VASP role at `address` with authentication key
-// `auth_key_prefix` | `new_account_address` and a 0 balance of type `CoinType`. If
-// `add_all_currencies` is true, 0 balances for all available currencies in the system will
-// also be added. This can only be invoked by an TreasuryCompliance account.
-// `sliding_nonce` is a unique nonce for operation, see `SlidingNonce` for details.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::PARENT_VASP_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                                                                                    |
-// | ------                | ------       | -------------                                                                                                                                                  |
-// | `CoinType`            | Type         | The Move type for the `CoinType` currency that the Parent VASP account should be initialized with. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                                                |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                                                     |
-// | `new_account_address` | `address`    | Address of the to-be-created Parent VASP account.                                                                                                              |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.                                                                       |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the Parent VASP.                                                                                                                  |
-// | `add_all_currencies`  | `bool`       | Whether to publish balance resources for all known currencies when the account is created.                                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`     | `Roles::ETREASURY_COMPLIANCE`           | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::NOT_PUBLISHED`     | `Diem::ECURRENCY_INFO`                 | The `CoinType` is not a registered currency on-chain.                                      |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::add_recovery_rotation_capability`
-// * `AccountAdministrationScripts::create_recovery_address`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-func EncodeCreateParentVaspAccountScriptFunction(coin_type diemtypes.TypeTag, sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte, add_all_currencies bool) diemtypes.TransactionPayload {
+// Let user change their vote during the voting time.
+func EncodeFlipVoteScriptFunction(token_t diemtypes.TypeTag, action_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountCreationScripts"},
-			Function: "create_parent_vasp_account",
-			TyArgs:   []diemtypes.TypeTag{coin_type},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(new_account_address), encode_u8vector_argument(auth_key_prefix), encode_u8vector_argument(human_name), encode_bool_argument(add_all_currencies)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DaoVoteScripts"},
+			Function: "flip_vote",
+			TyArgs:   []diemtypes.TypeTag{token_t, action_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
 		},
 	}
 }
 
-// # Summary
-// Initializes the sending account as a recovery address that may be used by
-// the VASP that it belongs to. The sending account must be a VASP account.
-// Multiple recovery addresses can exist for a single VASP, but accounts in
-// each must be disjoint.
-//
-// # Technical Description
-// Publishes a `RecoveryAddress::RecoveryAddress` resource under `account`. It then
-// extracts the `DiemAccount::KeyRotationCapability` for `account` and adds
-// it to the resource. After the successful execution of this transaction
-// other accounts may add their key rotation to this resource so that `account`
-// may be used as a recovery account for those accounts.
-//
-// # Parameters
-// | Name      | Type      | Description                                           |
-// | ------    | ------    | -------------                                         |
-// | `account` | `&signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                   |
-// | ----------------            | --------------                                             | -------------                                                                                 |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.          |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::ENOT_A_VASP`                             | `account` is not a VASP account.                                                              |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::EKEY_ROTATION_DEPENDENCY_CYCLE`          | A key rotation recovery cycle would be created by adding `account`'s key rotation capability. |
-// | `Errors::ALREADY_PUBLISHED` | `RecoveryAddress::ERECOVERY_ADDRESS`                       | A `RecoveryAddress::RecoveryAddress` resource has already been published under `account`.     |
-//
-// # Related Scripts
-// * `Script::add_recovery_rotation_capability`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeCreateRecoveryAddressScript() diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_recovery_address_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{},
+func EncodeInitDataSourceScriptFunction(oracle_t diemtypes.TypeTag, init_value serde.Uint128) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PriceOracleScripts"},
+			Function: "init_data_source",
+			TyArgs:   []diemtypes.TypeTag{oracle_t},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U128)(&init_value)},
+		},
 	}
 }
 
-// # Summary
-// Initializes the sending account as a recovery address that may be used by
-// other accounts belonging to the same VASP as `account`.
-// The sending account must be a VASP account, and can be either a child or parent VASP account.
-// Multiple recovery addresses can exist for a single VASP, but accounts in
-// each must be disjoint.
-//
-// # Technical Description
-// Publishes a `RecoveryAddress::RecoveryAddress` resource under `account`. It then
-// extracts the `DiemAccount::KeyRotationCapability` for `account` and adds
-// it to the resource. After the successful execution of this transaction
-// other accounts may add their key rotation to this resource so that `account`
-// may be used as a recovery account for those accounts.
-//
-// # Parameters
-// | Name      | Type     | Description                                           |
-// | ------    | ------   | -------------                                         |
-// | `account` | `signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                   |
-// | ----------------            | --------------                                             | -------------                                                                                 |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.          |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::ENOT_A_VASP`                             | `account` is not a VASP account.                                                              |
-// | `Errors::INVALID_ARGUMENT`  | `RecoveryAddress::EKEY_ROTATION_DEPENDENCY_CYCLE`          | A key rotation recovery cycle would be created by adding `account`'s key rotation capability. |
-// | `Errors::ALREADY_PUBLISHED` | `RecoveryAddress::ERECOVERY_ADDRESS`                       | A `RecoveryAddress::RecoveryAddress` resource has already been published under `account`.     |
-//
-// # Related Scripts
-// * `Script::add_recovery_rotation_capability`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeCreateRecoveryAddressScriptFunction() diemtypes.TransactionPayload {
+func EncodeInitializeScriptFunction(stdlib_version uint64, reward_delay uint64, pre_mine_stc_amount serde.Uint128, time_mint_stc_amount serde.Uint128, time_mint_stc_period uint64, parent_hash []byte, association_auth_key []byte, genesis_auth_key []byte, chain_id uint8, genesis_timestamp uint64, uncle_rate_target uint64, epoch_block_count uint64, base_block_time_target uint64, base_block_difficulty_window uint64, base_reward_per_block serde.Uint128, base_reward_per_uncle_percent uint64, min_block_time_target uint64, max_block_time_target uint64, base_max_uncles_per_block uint64, base_block_gas_limit uint64, strategy uint8, script_allowed bool, module_publishing_allowed bool, instruction_schedule []byte, native_schedule []byte, global_memory_per_byte_cost uint64, global_memory_per_byte_write_cost uint64, min_transaction_gas_units uint64, large_transaction_cutoff uint64, instrinsic_gas_per_byte uint64, maximum_number_of_gas_units uint64, min_price_per_gas_unit uint64, max_price_per_gas_unit uint64, max_transaction_size_in_bytes uint64, gas_unit_scaling_factor uint64, default_account_size uint64, voting_delay uint64, voting_period uint64, voting_quorum_rate uint8, min_action_delay uint64, transaction_timeout uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "create_recovery_address",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Genesis"},
+			Function: "initialize",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&stdlib_version), (*diemtypes.TransactionArgument__U64)(&reward_delay), (*diemtypes.TransactionArgument__U128)(&pre_mine_stc_amount), (*diemtypes.TransactionArgument__U128)(&time_mint_stc_amount), (*diemtypes.TransactionArgument__U64)(&time_mint_stc_period), (*diemtypes.TransactionArgument__U8Vector)(&parent_hash), (*diemtypes.TransactionArgument__U8Vector)(&association_auth_key), (*diemtypes.TransactionArgument__U8Vector)(&genesis_auth_key), (*diemtypes.TransactionArgument__U8)(&chain_id), (*diemtypes.TransactionArgument__U64)(&genesis_timestamp), (*diemtypes.TransactionArgument__U64)(&uncle_rate_target), (*diemtypes.TransactionArgument__U64)(&epoch_block_count), (*diemtypes.TransactionArgument__U64)(&base_block_time_target), (*diemtypes.TransactionArgument__U64)(&base_block_difficulty_window), (*diemtypes.TransactionArgument__U128)(&base_reward_per_block), (*diemtypes.TransactionArgument__U64)(&base_reward_per_uncle_percent), (*diemtypes.TransactionArgument__U64)(&min_block_time_target), (*diemtypes.TransactionArgument__U64)(&max_block_time_target), (*diemtypes.TransactionArgument__U64)(&base_max_uncles_per_block), (*diemtypes.TransactionArgument__U64)(&base_block_gas_limit), (*diemtypes.TransactionArgument__U8)(&strategy), (*diemtypes.TransactionArgument__Bool)(&script_allowed), (*diemtypes.TransactionArgument__Bool)(&module_publishing_allowed), (*diemtypes.TransactionArgument__U8Vector)(&instruction_schedule), (*diemtypes.TransactionArgument__U8Vector)(&native_schedule), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_cost), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_write_cost), (*diemtypes.TransactionArgument__U64)(&min_transaction_gas_units), (*diemtypes.TransactionArgument__U64)(&large_transaction_cutoff), (*diemtypes.TransactionArgument__U64)(&instrinsic_gas_per_byte), (*diemtypes.TransactionArgument__U64)(&maximum_number_of_gas_units), (*diemtypes.TransactionArgument__U64)(&min_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_transaction_size_in_bytes), (*diemtypes.TransactionArgument__U64)(&gas_unit_scaling_factor), (*diemtypes.TransactionArgument__U64)(&default_account_size), (*diemtypes.TransactionArgument__U64)(&voting_delay), (*diemtypes.TransactionArgument__U64)(&voting_period), (*diemtypes.TransactionArgument__U8)(&voting_quorum_rate), (*diemtypes.TransactionArgument__U64)(&min_action_delay), (*diemtypes.TransactionArgument__U64)(&transaction_timeout)},
 		},
 	}
 }
 
-// # Summary
-// Creates a Validator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorConfig::ValidatorConfig` resource with empty `config`, and
-// `operator_account` fields. The `human_name` field of the
-// `ValidatorConfig::ValidatorConfig` is set to the passed in `human_name`.
-// This script does not add the validator to the validator set or the system,
-// but only creates the account.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                     |
-// | ------                | ------       | -------------                                                                                   |
-// | `dr_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer. |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                                 |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.        |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::add_validator_and_reconfigure`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeCreateValidatorAccountScript(sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_validator_account_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{new_account_address}, (*diemtypes.TransactionArgument__U8Vector)(&auth_key_prefix), (*diemtypes.TransactionArgument__U8Vector)(&human_name)},
-	}
-}
-
-// # Summary
-// Creates a Validator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorConfig::ValidatorConfig` resource with empty `config`, and
-// `operator_account` fields. The `human_name` field of the
-// `ValidatorConfig::ValidatorConfig` is set to the passed in `human_name`.
-// This script does not add the validator to the validator set or the system,
-// but only creates the account.
-// Authentication keys, prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::VALIDATOR_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                              |
-// | ------                | ------       | -------------                                                                            |
-// | `dr_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.     |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.               |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                          |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account. |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeCreateValidatorAccountScriptFunction(sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte) diemtypes.TransactionPayload {
+func EncodeInitializeV2ScriptFunction(stdlib_version uint64, reward_delay uint64, total_stc_amount serde.Uint128, pre_mine_stc_amount serde.Uint128, time_mint_stc_amount serde.Uint128, time_mint_stc_period uint64, parent_hash []byte, association_auth_key []byte, genesis_auth_key []byte, chain_id uint8, genesis_timestamp uint64, uncle_rate_target uint64, epoch_block_count uint64, base_block_time_target uint64, base_block_difficulty_window uint64, base_reward_per_block serde.Uint128, base_reward_per_uncle_percent uint64, min_block_time_target uint64, max_block_time_target uint64, base_max_uncles_per_block uint64, base_block_gas_limit uint64, strategy uint8, script_allowed bool, module_publishing_allowed bool, instruction_schedule []byte, native_schedule []byte, global_memory_per_byte_cost uint64, global_memory_per_byte_write_cost uint64, min_transaction_gas_units uint64, large_transaction_cutoff uint64, instrinsic_gas_per_byte uint64, maximum_number_of_gas_units uint64, min_price_per_gas_unit uint64, max_price_per_gas_unit uint64, max_transaction_size_in_bytes uint64, gas_unit_scaling_factor uint64, default_account_size uint64, voting_delay uint64, voting_period uint64, voting_quorum_rate uint8, min_action_delay uint64, transaction_timeout uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountCreationScripts"},
-			Function: "create_validator_account",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Genesis"},
+			Function: "initialize_v2",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(new_account_address), encode_u8vector_argument(auth_key_prefix), encode_u8vector_argument(human_name)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&stdlib_version), (*diemtypes.TransactionArgument__U64)(&reward_delay), (*diemtypes.TransactionArgument__U128)(&total_stc_amount), (*diemtypes.TransactionArgument__U128)(&pre_mine_stc_amount), (*diemtypes.TransactionArgument__U128)(&time_mint_stc_amount), (*diemtypes.TransactionArgument__U64)(&time_mint_stc_period), (*diemtypes.TransactionArgument__U8Vector)(&parent_hash), (*diemtypes.TransactionArgument__U8Vector)(&association_auth_key), (*diemtypes.TransactionArgument__U8Vector)(&genesis_auth_key), (*diemtypes.TransactionArgument__U8)(&chain_id), (*diemtypes.TransactionArgument__U64)(&genesis_timestamp), (*diemtypes.TransactionArgument__U64)(&uncle_rate_target), (*diemtypes.TransactionArgument__U64)(&epoch_block_count), (*diemtypes.TransactionArgument__U64)(&base_block_time_target), (*diemtypes.TransactionArgument__U64)(&base_block_difficulty_window), (*diemtypes.TransactionArgument__U128)(&base_reward_per_block), (*diemtypes.TransactionArgument__U64)(&base_reward_per_uncle_percent), (*diemtypes.TransactionArgument__U64)(&min_block_time_target), (*diemtypes.TransactionArgument__U64)(&max_block_time_target), (*diemtypes.TransactionArgument__U64)(&base_max_uncles_per_block), (*diemtypes.TransactionArgument__U64)(&base_block_gas_limit), (*diemtypes.TransactionArgument__U8)(&strategy), (*diemtypes.TransactionArgument__Bool)(&script_allowed), (*diemtypes.TransactionArgument__Bool)(&module_publishing_allowed), (*diemtypes.TransactionArgument__U8Vector)(&instruction_schedule), (*diemtypes.TransactionArgument__U8Vector)(&native_schedule), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_cost), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_write_cost), (*diemtypes.TransactionArgument__U64)(&min_transaction_gas_units), (*diemtypes.TransactionArgument__U64)(&large_transaction_cutoff), (*diemtypes.TransactionArgument__U64)(&instrinsic_gas_per_byte), (*diemtypes.TransactionArgument__U64)(&maximum_number_of_gas_units), (*diemtypes.TransactionArgument__U64)(&min_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_transaction_size_in_bytes), (*diemtypes.TransactionArgument__U64)(&gas_unit_scaling_factor), (*diemtypes.TransactionArgument__U64)(&default_account_size), (*diemtypes.TransactionArgument__U64)(&voting_delay), (*diemtypes.TransactionArgument__U64)(&voting_period), (*diemtypes.TransactionArgument__U8)(&voting_quorum_rate), (*diemtypes.TransactionArgument__U64)(&min_action_delay), (*diemtypes.TransactionArgument__U64)(&transaction_timeout)},
 		},
 	}
 }
 
-// # Summary
-// Creates a Validator Operator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator Operator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorOperatorConfig::ValidatorOperatorConfig` resource with the specified `human_name`.
-// This script does not assign the validator operator to any validator accounts but only creates the account.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                                     |
-// | ------                | ------       | -------------                                                                                   |
-// | `dr_account`          | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer. |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                                 |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account.        |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                                     |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeCreateValidatorOperatorAccountScript(sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), create_validator_operator_account_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{new_account_address}, (*diemtypes.TransactionArgument__U8Vector)(&auth_key_prefix), (*diemtypes.TransactionArgument__U8Vector)(&human_name)},
-	}
-}
-
-// # Summary
-// Creates a Validator Operator account. This transaction can only be sent by the Diem
-// Root account.
-//
-// # Technical Description
-// Creates an account with a Validator Operator role at `new_account_address`, with authentication key
-// `auth_key_prefix` | `new_account_address`. It publishes a
-// `ValidatorOperatorConfig::ValidatorOperatorConfig` resource with the specified `human_name`.
-// This script does not assign the validator operator to any validator accounts but only creates the account.
-// Authentication key prefixes, and how to construct them from an ed25519 public key are described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-//
-// # Events
-// Successful execution will emit:
-// * A `DiemAccount::CreateAccountEvent` with the `created` field being `new_account_address`,
-// and the `rold_id` field being `Roles::VALIDATOR_OPERATOR_ROLE_ID`. This is emitted on the
-// `DiemAccount::AccountOperationsCapability` `creation_events` handle.
-//
-// # Parameters
-// | Name                  | Type         | Description                                                                              |
-// | ------                | ------       | -------------                                                                            |
-// | `dr_account`          | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.     |
-// | `sliding_nonce`       | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.               |
-// | `new_account_address` | `address`    | Address of the to-be-created Validator account.                                          |
-// | `auth_key_prefix`     | `vector<u8>` | The authentication key prefix that will be used initially for the newly created account. |
-// | `human_name`          | `vector<u8>` | ASCII-encoded human name for the validator.                                              |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                            | Description                                                                                |
-// | ----------------            | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`     | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                             |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT`  | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS`  | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                         |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                         |
-// | `Errors::ALREADY_PUBLISHED` | `Roles::EROLE_ID`                       | The `new_account_address` address is already taken.                                        |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeCreateValidatorOperatorAccountScriptFunction(sliding_nonce uint64, new_account_address diemtypes.AccountAddress, auth_key_prefix []byte, human_name []byte) diemtypes.TransactionPayload {
+func EncodeMintScriptFunction(amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountCreationScripts"},
-			Function: "create_validator_operator_account",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DummyTokenScripts"},
+			Function: "mint",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(new_account_address), encode_u8vector_argument(auth_key_prefix), encode_u8vector_argument(human_name)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U128)(&amount)},
 		},
 	}
 }
 
-// # Summary
-// Publishes a `VASPDomain::VASPDomains` resource under a parent VASP account.
-// The sending account must be a parent VASP account.
-//
-// # Technical Description
-// Publishes a `VASPDomain::VASPDomains` resource under `account`.
-// The The `VASPDomain::VASPDomains` resource's `domains` field is a vector
-// of VASPDomain, and will be empty on at the end of processing this transaction.
-//
-// # Parameters
-// | Name      | Type     | Description                                           |
-// | ------    | ------   | -------------                                         |
-// | `account` | `signer` | The signer of the sending account of the transaction. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason              | Description                                                                    |
-// | ----------------            | --------------            | -------------                                                                  |
-// | `Errors::ALREADY_PUBLISHED` | `VASPDomain::EVASP_DOMAINS` | A `VASPDomain::VASPDomains` resource has already been published under `account`. |
-// | `Errors::REQUIRES_ROLE`     | `Roles::EPARENT_VASP`     | The sending `account` was not a parent VASP account.                           |
-func EncodeCreateVaspDomainsScriptFunction() diemtypes.TransactionPayload {
+func EncodePeerToPeerScriptFunction(token_type diemtypes.TypeTag, payee diemtypes.AccountAddress, _payee_auth_key []byte, amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "create_vasp_domains",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
+			Function: "peer_to_peer",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{payee}, (*diemtypes.TransactionArgument__U8Vector)(&_payee_auth_key), (*diemtypes.TransactionArgument__U128)(&amount)},
 		},
 	}
 }
 
-// # Summary
-// Freezes the account at `address`. The sending account of this transaction
-// must be the Treasury Compliance account. The account being frozen cannot be
-// the Diem Root or Treasury Compliance account. After the successful
-// execution of this transaction no transactions may be sent from the frozen
-// account, and the frozen account may not send or receive coins.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `true` and emits a
-// `AccountFreezing::FreezeAccountEvent`. The transaction sender must be the
-// Treasury Compliance account, but the account at `to_freeze_account` must
-// not be either `0xA550C18` (the Diem Root address), or `0xB1E55ED` (the
-// Treasury Compliance address). Note that this is a per-account property
-// e.g., freezing a Parent VASP will not effect the status any of its child
-// accounts and vice versa.
-//
-
-// ## Events
-// Successful execution of this transaction will emit a `AccountFreezing::FreezeAccountEvent` on
-// the `freeze_event_handle` held in the `AccountFreezing::FreezeEventsHolder` resource published
-// under `0xA550C18` with the `frozen_address` being the `to_freeze_account`.
-//
-// # Parameters
-// | Name                | Type      | Description                                                                                               |
-// | ------              | ------    | -------------                                                                                             |
-// | `tc_account`        | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`     | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `to_freeze_account` | `address` | The account address to be frozen.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                |
-// | ----------------           | --------------                               | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`        | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`                | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_TC`         | `to_freeze_account` was the Treasury Compliance account (`0xB1E55ED`).                     |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_DIEM_ROOT` | `to_freeze_account` was the Diem Root account (`0xA550C18`).                              |
-//
-// # Related Scripts
-// * `Script::unfreeze_account`
-func EncodeFreezeAccountScript(sliding_nonce uint64, to_freeze_account diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), freeze_account_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{to_freeze_account}},
-	}
-}
-
-// # Summary
-// Freezes the account at `address`. The sending account of this transaction
-// must be the Treasury Compliance account. The account being frozen cannot be
-// the Diem Root or Treasury Compliance account. After the successful
-// execution of this transaction no transactions may be sent from the frozen
-// account, and the frozen account may not send or receive coins.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `true` and emits a
-// `AccountFreezing::FreezeAccountEvent`. The transaction sender must be the
-// Treasury Compliance account, but the account at `to_freeze_account` must
-// not be either `0xA550C18` (the Diem Root address), or `0xB1E55ED` (the
-// Treasury Compliance address). Note that this is a per-account property
-// e.g., freezing a Parent VASP will not effect the status any of its child
-// accounts and vice versa.
-//
-
-// # Events
-// Successful execution of this transaction will emit a `AccountFreezing::FreezeAccountEvent` on
-// the `freeze_event_handle` held in the `AccountFreezing::FreezeEventsHolder` resource published
-// under `0xA550C18` with the `frozen_address` being the `to_freeze_account`.
-//
-// # Parameters
-// | Name                | Type      | Description                                                                                     |
-// | ------              | ------    | -------------                                                                                   |
-// | `tc_account`        | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`     | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `to_freeze_account` | `address` | The account address to be frozen.                                                               |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                |
-// | ----------------           | --------------                               | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`        | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`                | The sending account is not the Treasury Compliance account.                                |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_TC`         | `to_freeze_account` was the Treasury Compliance account (`0xB1E55ED`).                     |
-// | `Errors::INVALID_ARGUMENT` | `AccountFreezing::ECANNOT_FREEZE_DIEM_ROOT` | `to_freeze_account` was the Diem Root account (`0xA550C18`).                              |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::unfreeze_account`
-func EncodeFreezeAccountScriptFunction(sliding_nonce uint64, to_freeze_account diemtypes.AccountAddress) diemtypes.TransactionPayload {
+func EncodePeerToPeerBatchScriptFunction(token_type diemtypes.TypeTag, _payeees []byte, _payee_auth_keys []byte, _amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "freeze_account",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(to_freeze_account)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
+			Function: "peer_to_peer_batch",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&_payeees), (*diemtypes.TransactionArgument__U8Vector)(&_payee_auth_keys), (*diemtypes.TransactionArgument__U128)(&_amount)},
 		},
 	}
 }
 
-// # Summary
-// Initializes the Diem consensus config that is stored on-chain.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Initializes the `DiemConsensusConfig` on-chain config to empty and allows future updates from DiemRoot via
-// `update_diem_consensus_config`. This doesn't emit a `DiemConfig::NewEpochEvent`.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                |
-// | ------          | ------    | -------------                                                              |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.               |
-// | `sliding_nonce` | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-func EncodeInitializeDiemConsensusConfigScriptFunction(sliding_nonce uint64) diemtypes.TransactionPayload {
+func EncodePeerToPeerV2ScriptFunction(token_type diemtypes.TypeTag, payee diemtypes.AccountAddress, amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "SystemAdministrationScripts"},
-			Function: "initialize_diem_consensus_config",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
+			Function: "peer_to_peer_v2",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{payee}, (*diemtypes.TransactionArgument__U128)(&amount)},
 		},
 	}
 }
 
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another by multi-agent transaction.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata`.
-// Dual attestation is not applied to this script as payee is also a signer of the transaction.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `signer`     | The signer of the sending account that coins are being transferred from.                                                     |
-// | `payee`              | `signer`     | The signer of the receiving account that the coins are being transferred to.                                                 |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`       | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`             | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`             | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`             | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`        | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-func EncodePeerToPeerBySignersScriptFunction(currency diemtypes.TypeTag, amount uint64, metadata []byte) diemtypes.TransactionPayload {
+func EncodePeerToPeerWithMetadataScriptFunction(token_type diemtypes.TypeTag, payee diemtypes.AccountAddress, _payee_auth_key []byte, amount serde.Uint128, metadata []byte) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PaymentScripts"},
-			Function: "peer_to_peer_by_signers",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{encode_u64_argument(amount), encode_u8vector_argument(metadata)},
-		},
-	}
-}
-
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata` and an (optional) `metadata_signature` on the message
-// `metadata` | `Signer::address_of(payer)` | `amount` | `DualAttestation::DOMAIN_SEPARATOR`.
-// The `metadata` and `metadata_signature` parameters are only required if `amount` >=
-// `DualAttestation::get_cur_microdiem_limit` XDX and `payer` and `payee` are distinct VASPs.
-// However, a transaction sender can opt in to dual attestation even when it is not required
-// (e.g., a DesignatedDealer -> VASP payment) by providing a non-empty `metadata_signature`.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// ## Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `&signer`    | The signer reference of the sending account that coins are being transferred from.                                           |
-// | `payee`              | `address`    | The address of the account the coins are being transferred to.                                                               |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-// | `metadata_signature` | `vector<u8>` | Optional signature over `metadata` and payment information. See                                                              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`      | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`            | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`            | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`            | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE` | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EMALFORMED_METADATA_SIGNATURE` | `metadata_signature` is not 64 bytes.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_METADATA_SIGNATURE`   | `metadata_signature` does not verify on the against the `payee'`s `DualAttestation::Credential` `compliance_public_key` public key. |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`       | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`          | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `Script::create_child_vasp_account`
-// * `Script::create_parent_vasp_account`
-// * `Script::add_currency_to_account`
-func EncodePeerToPeerWithMetadataScript(currency diemtypes.TypeTag, payee diemtypes.AccountAddress, amount uint64, metadata []byte, metadata_signature []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), peer_to_peer_with_metadata_code...),
-		TyArgs: []diemtypes.TypeTag{currency},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{payee}, (*diemtypes.TransactionArgument__U64)(&amount), (*diemtypes.TransactionArgument__U8Vector)(&metadata), (*diemtypes.TransactionArgument__U8Vector)(&metadata_signature)},
-	}
-}
-
-// # Summary
-// Transfers a given number of coins in a specified currency from one account to another.
-// Transfers over a specified amount defined on-chain that are between two different VASPs, or
-// other accounts that have opted-in will be subject to on-chain checks to ensure the receiver has
-// agreed to receive the coins.  This transaction can be sent by any account that can hold a
-// balance, and to any account that can hold a balance. Both accounts must hold balances in the
-// currency being transacted.
-//
-// # Technical Description
-//
-// Transfers `amount` coins of type `Currency` from `payer` to `payee` with (optional) associated
-// `metadata` and an (optional) `metadata_signature` on the message of the form
-// `metadata` | `Signer::address_of(payer)` | `amount` | `DualAttestation::DOMAIN_SEPARATOR`, that
-// has been signed by the `payee`'s private key associated with the `compliance_public_key` held in
-// the `payee`'s `DualAttestation::Credential`. Both the `Signer::address_of(payer)` and `amount` fields
-// in the `metadata_signature` must be BCS-encoded bytes, and `|` denotes concatenation.
-// The `metadata` and `metadata_signature` parameters are only required if `amount` >=
-// `DualAttestation::get_cur_microdiem_limit` XDX and `payer` and `payee` are distinct VASPs.
-// However, a transaction sender can opt in to dual attestation even when it is not required
-// (e.g., a DesignatedDealer -> VASP payment) by providing a non-empty `metadata_signature`.
-// Standardized `metadata` BCS format can be found in `diem_types::transaction::metadata::Metadata`.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * A `DiemAccount::SentPaymentEvent` on `payer`'s `DiemAccount::DiemAccount` `sent_events` handle; and
-// * A `DiemAccount::ReceivedPaymentEvent` on `payee`'s `DiemAccount::DiemAccount` `received_events` handle.
-//
-// # Parameters
-// | Name                 | Type         | Description                                                                                                                  |
-// | ------               | ------       | -------------                                                                                                                |
-// | `Currency`           | Type         | The Move type for the `Currency` being sent in this transaction. `Currency` must be an already-registered currency on-chain. |
-// | `payer`              | `signer`     | The signer of the sending account that coins are being transferred from.                                                     |
-// | `payee`              | `address`    | The address of the account the coins are being transferred to.                                                               |
-// | `metadata`           | `vector<u8>` | Optional metadata about this payment.                                                                                        |
-// | `metadata_signature` | `vector<u8>` | Optional signature over `metadata` and payment information. See                                                              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                     | Description                                                                                                                         |
-// | ----------------           | --------------                                   | -------------                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`       | `payer` doesn't hold a balance in `Currency`.                                                                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EINSUFFICIENT_BALANCE`             | `amount` is greater than `payer`'s balance in `Currency`.                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::ECOIN_DEPOSIT_IS_ZERO`             | `amount` is zero.                                                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `DiemAccount::EPAYEE_DOES_NOT_EXIST`             | No account exists at the `payee` address.                                                                                           |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EPAYEE_CANT_ACCEPT_CURRENCY_TYPE`  | An account exists at `payee`, but it does not accept payments in `Currency`.                                                        |
-// | `Errors::INVALID_STATE`    | `AccountFreezing::EACCOUNT_FROZEN`               | The `payee` account is frozen.                                                                                                      |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EMALFORMED_METADATA_SIGNATURE` | `metadata_signature` is not 64 bytes.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_METADATA_SIGNATURE`   | `metadata_signature` does not verify on the against the `payee'`s `DualAttestation::Credential` `compliance_public_key` public key. |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EWITHDRAWAL_EXCEEDS_LIMITS`        | `payer` has exceeded its daily withdrawal limits for the backing coins of XDX.                                                      |
-// | `Errors::LIMIT_EXCEEDED`   | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`           | `payee` has exceeded its daily deposit limits for XDX.                                                                              |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_child_vasp_account`
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountAdministrationScripts::add_currency_to_account`
-// * `PaymentScripts::peer_to_peer_by_signers`
-func EncodePeerToPeerWithMetadataScriptFunction(currency diemtypes.TypeTag, payee diemtypes.AccountAddress, amount uint64, metadata []byte, metadata_signature []byte) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PaymentScripts"},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
 			Function: "peer_to_peer_with_metadata",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{encode_address_argument(payee), encode_u64_argument(amount), encode_u8vector_argument(metadata), encode_u8vector_argument(metadata_signature)},
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{payee}, (*diemtypes.TransactionArgument__U8Vector)(&_payee_auth_key), (*diemtypes.TransactionArgument__U128)(&amount), (*diemtypes.TransactionArgument__U8Vector)(&metadata)},
 		},
 	}
 }
 
-// # Summary
-// Moves a specified number of coins in a given currency from the account's
-// balance to its preburn area after which the coins may be burned. This
-// transaction may be sent by any account that holds a balance and preburn area
-// in the specified currency.
-//
-// # Technical Description
-// Moves the specified `amount` of coins in `Token` currency from the sending `account`'s
-// `DiemAccount::Balance<Token>` to the `Diem::Preburn<Token>` published under the same
-// `account`. `account` must have both of these resources published under it at the start of this
-// transaction in order for it to execute successfully.
-//
-// ## Events
-// Successful execution of this script emits two events:
-// * `DiemAccount::SentPaymentEvent ` on `account`'s `DiemAccount::DiemAccount` `sent_events`
-// handle with the `payee` and `payer` fields being `account`'s address; and
-// * A `Diem::PreburnEvent` with `Token`'s currency code on the
-// `Diem::CurrencyInfo<Token`'s `preburn_events` handle for `Token` and with
-// `preburn_address` set to `account`'s address.
-//
-// # Parameters
-// | Name      | Type      | Description                                                                                                                      |
-// | ------    | ------    | -------------                                                                                                                    |
-// | `Token`   | Type      | The Move type for the `Token` currency being moved to the preburn area. `Token` must be an already-registered currency on-chain. |
-// | `account` | `&signer` | The signer reference of the sending account.                                                                                     |
-// | `amount`  | `u64`     | The amount in `Token` to be moved to the preburn area.                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category           | Error Reason                                             | Description                                                                             |
-// | ----------------         | --------------                                           | -------------                                                                           |
-// | `Errors::NOT_PUBLISHED`  | `Diem::ECURRENCY_INFO`                                  | The `Token` is not a registered currency on-chain.                                      |
-// | `Errors::INVALID_STATE`  | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for `account` has already been extracted.                     |
-// | `Errors::LIMIT_EXCEEDED` | `DiemAccount::EINSUFFICIENT_BALANCE`                    | `amount` is greater than `payer`'s balance in `Token`.                                  |
-// | `Errors::NOT_PUBLISHED`  | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | `account` doesn't hold a balance in `Token`.                                            |
-// | `Errors::NOT_PUBLISHED`  | `Diem::EPREBURN`                                        | `account` doesn't have a `Diem::Preburn<Token>` resource published under it.           |
-// | `Errors::INVALID_STATE`  | `Diem::EPREBURN_OCCUPIED`                               | The `value` field in the `Diem::Preburn<Token>` resource under the sender is non-zero. |
-// | `Errors::NOT_PUBLISHED`  | `Roles::EROLE_ID`                                        | The `account` did not have a role assigned to it.                                       |
-// | `Errors::REQUIRES_ROLE`  | `Roles::EDESIGNATED_DEALER`                              | The `account` did not have the role of DesignatedDealer.                                |
-//
-// # Related Scripts
-// * `Script::cancel_burn`
-// * `Script::burn`
-// * `Script::burn_txn_fees`
-func EncodePreburnScript(token diemtypes.TypeTag, amount uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), preburn_code...),
-		TyArgs: []diemtypes.TypeTag{token},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&amount)},
+func EncodePeerToPeerWithMetadataV2ScriptFunction(token_type diemtypes.TypeTag, payee diemtypes.AccountAddress, amount serde.Uint128, metadata []byte) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
+			Function: "peer_to_peer_with_metadata_v2",
+			TyArgs:   []diemtypes.TypeTag{token_type},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{payee}, (*diemtypes.TransactionArgument__U128)(&amount), (*diemtypes.TransactionArgument__U8Vector)(&metadata)},
+		},
 	}
 }
 
-// # Summary
-// Moves a specified number of coins in a given currency from the account's
-// balance to its preburn area after which the coins may be burned. This
-// transaction may be sent by any account that holds a balance and preburn area
-// in the specified currency.
-//
-// # Technical Description
-// Moves the specified `amount` of coins in `Token` currency from the sending `account`'s
-// `DiemAccount::Balance<Token>` to the `Diem::Preburn<Token>` published under the same
-// `account`. `account` must have both of these resources published under it at the start of this
-// transaction in order for it to execute successfully.
-//
-// # Events
-// Successful execution of this script emits two events:
-// * `DiemAccount::SentPaymentEvent ` on `account`'s `DiemAccount::DiemAccount` `sent_events`
-// handle with the `payee` and `payer` fields being `account`'s address; and
-// * A `Diem::PreburnEvent` with `Token`'s currency code on the
-// `Diem::CurrencyInfo<Token`'s `preburn_events` handle for `Token` and with
-// `preburn_address` set to `account`'s address.
-//
-// # Parameters
-// | Name      | Type     | Description                                                                                                                      |
-// | ------    | ------   | -------------                                                                                                                    |
-// | `Token`   | Type     | The Move type for the `Token` currency being moved to the preburn area. `Token` must be an already-registered currency on-chain. |
-// | `account` | `signer` | The signer of the sending account.                                                                                               |
-// | `amount`  | `u64`    | The amount in `Token` to be moved to the preburn area.                                                                           |
-//
-// # Common Abort Conditions
-// | Error Category           | Error Reason                                             | Description                                                                             |
-// | ----------------         | --------------                                           | -------------                                                                           |
-// | `Errors::NOT_PUBLISHED`  | `Diem::ECURRENCY_INFO`                                  | The `Token` is not a registered currency on-chain.                                      |
-// | `Errors::INVALID_STATE`  | `DiemAccount::EWITHDRAWAL_CAPABILITY_ALREADY_EXTRACTED` | The withdrawal capability for `account` has already been extracted.                     |
-// | `Errors::LIMIT_EXCEEDED` | `DiemAccount::EINSUFFICIENT_BALANCE`                    | `amount` is greater than `payer`'s balance in `Token`.                                  |
-// | `Errors::NOT_PUBLISHED`  | `DiemAccount::EPAYER_DOESNT_HOLD_CURRENCY`              | `account` doesn't hold a balance in `Token`.                                            |
-// | `Errors::NOT_PUBLISHED`  | `Diem::EPREBURN`                                        | `account` doesn't have a `Diem::Preburn<Token>` resource published under it.           |
-// | `Errors::INVALID_STATE`  | `Diem::EPREBURN_OCCUPIED`                               | The `value` field in the `Diem::Preburn<Token>` resource under the sender is non-zero. |
-// | `Errors::NOT_PUBLISHED`  | `Roles::EROLE_ID`                                        | The `account` did not have a role assigned to it.                                       |
-// | `Errors::REQUIRES_ROLE`  | `Roles::EDESIGNATED_DEALER`                              | The `account` did not have the role of DesignatedDealer.                                |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::cancel_burn_with_amount`
-// * `TreasuryComplianceScripts::burn_with_amount`
-// * `TreasuryComplianceScripts::burn_txn_fees`
-func EncodePreburnScriptFunction(token diemtypes.TypeTag, amount uint64) diemtypes.TransactionPayload {
+// Entrypoint for the proposal.
+func EncodeProposeScriptFunction(token_t diemtypes.TypeTag, voting_delay uint64, voting_period uint64, voting_quorum_rate uint8, min_action_delay uint64, exec_delay uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "preburn",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModifyDaoConfigProposal"},
+			Function: "propose",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&voting_delay), (*diemtypes.TransactionArgument__U64)(&voting_period), (*diemtypes.TransactionArgument__U8)(&voting_quorum_rate), (*diemtypes.TransactionArgument__U64)(&min_action_delay), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
+		},
+	}
+}
+
+func EncodeProposeModuleUpgradeV2ScriptFunction(token diemtypes.TypeTag, module_address diemtypes.AccountAddress, package_hash []byte, version uint64, exec_delay uint64, enforced bool) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "propose_module_upgrade_v2",
 			TyArgs:   []diemtypes.TypeTag{token},
-			Args:     [][]byte{encode_u64_argument(amount)},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{module_address}, (*diemtypes.TransactionArgument__U8Vector)(&package_hash), (*diemtypes.TransactionArgument__U64)(&version), (*diemtypes.TransactionArgument__U64)(&exec_delay), (*diemtypes.TransactionArgument__Bool)(&enforced)},
 		},
 	}
 }
 
-// # Summary
-// Rotates the authentication key of the sending account to the
-// newly-specified public key and publishes a new shared authentication key
-// under the sender's account. Any account can send this transaction.
-//
-// # Technical Description
-// Rotates the authentication key of the sending account to `public_key`,
-// and publishes a `SharedEd25519PublicKey::SharedEd25519PublicKey` resource
-// containing the 32-byte ed25519 `public_key` and the `DiemAccount::KeyRotationCapability` for
-// `account` under `account`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                               |
-// | ------       | ------       | -------------                                                                             |
-// | `account`    | `&signer`    | The signer reference of the sending account of the transaction.                           |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key for `account`' authentication key to be rotated to and stored. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                         |
-// | ----------------            | --------------                                             | -------------                                                                                       |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability` resource.       |
-// | `Errors::ALREADY_PUBLISHED` | `SharedEd25519PublicKey::ESHARED_KEY`                      | The `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is already published under `account`. |
-// | `Errors::INVALID_ARGUMENT`  | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY`            | `public_key` is an invalid ed25519 public key.                                                      |
-//
-// # Related Scripts
-// * `Script::rotate_shared_ed25519_public_key`
-func EncodePublishSharedEd25519PublicKeyScript(public_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), publish_shared_ed25519_public_key_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&public_key)},
-	}
-}
-
-// # Summary
-// Rotates the authentication key of the sending account to the newly-specified ed25519 public key and
-// publishes a new shared authentication key derived from that public key under the sender's account.
-// Any account can send this transaction.
-//
-// # Technical Description
-// Rotates the authentication key of the sending account to the
-// [authentication key derived from `public_key`](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys)
-// and publishes a `SharedEd25519PublicKey::SharedEd25519PublicKey` resource
-// containing the 32-byte ed25519 `public_key` and the `DiemAccount::KeyRotationCapability` for
-// `account` under `account`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                        |
-// | ------       | ------       | -------------                                                                                      |
-// | `account`    | `signer`     | The signer of the sending account of the transaction.                                              |
-// | `public_key` | `vector<u8>` | A valid 32-byte Ed25519 public key for `account`'s authentication key to be rotated to and stored. |
-//
-// # Common Abort Conditions
-// | Error Category              | Error Reason                                               | Description                                                                                         |
-// | ----------------            | --------------                                             | -------------                                                                                       |
-// | `Errors::INVALID_STATE`     | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability` resource.       |
-// | `Errors::ALREADY_PUBLISHED` | `SharedEd25519PublicKey::ESHARED_KEY`                      | The `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is already published under `account`. |
-// | `Errors::INVALID_ARGUMENT`  | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY`            | `public_key` is an invalid ed25519 public key.                                                      |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_shared_ed25519_public_key`
-func EncodePublishSharedEd25519PublicKeyScriptFunction(public_key []byte) diemtypes.TransactionPayload {
+func EncodeProposeUpdateConsensusConfigScriptFunction(uncle_rate_target uint64, base_block_time_target uint64, base_reward_per_block serde.Uint128, base_reward_per_uncle_percent uint64, epoch_block_count uint64, base_block_difficulty_window uint64, min_block_time_target uint64, max_block_time_target uint64, base_max_uncles_per_block uint64, base_block_gas_limit uint64, strategy uint8, exec_delay uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "publish_shared_ed25519_public_key",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_consensus_config",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u8vector_argument(public_key)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&uncle_rate_target), (*diemtypes.TransactionArgument__U64)(&base_block_time_target), (*diemtypes.TransactionArgument__U128)(&base_reward_per_block), (*diemtypes.TransactionArgument__U64)(&base_reward_per_uncle_percent), (*diemtypes.TransactionArgument__U64)(&epoch_block_count), (*diemtypes.TransactionArgument__U64)(&base_block_difficulty_window), (*diemtypes.TransactionArgument__U64)(&min_block_time_target), (*diemtypes.TransactionArgument__U64)(&max_block_time_target), (*diemtypes.TransactionArgument__U64)(&base_max_uncles_per_block), (*diemtypes.TransactionArgument__U64)(&base_block_gas_limit), (*diemtypes.TransactionArgument__U8)(&strategy), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
 		},
 	}
 }
 
-// # Summary
-// Updates a validator's configuration. This does not reconfigure the system and will not update
-// the configuration in the validator set that is seen by other validators in the network. Can
-// only be successfully sent by a Validator Operator account that is already registered with a
-// validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It does not emit a `DiemConfig::NewEpochEvent`
-// so the copy of this config held in the validator set will not be updated, and the changes are
-// only "locally" under the `validator_account` account address.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                                  |
-// | ------                        | ------       | -------------                                                                                                                |
-// | `validator_operator_account`  | `&signer`    | Signer reference of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                                    |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                                         |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                       |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeRegisterValidatorConfigScript(validator_account diemtypes.AccountAddress, consensus_pubkey []byte, validator_network_addresses []byte, fullnode_network_addresses []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), register_validator_config_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{validator_account}, (*diemtypes.TransactionArgument__U8Vector)(&consensus_pubkey), (*diemtypes.TransactionArgument__U8Vector)(&validator_network_addresses), (*diemtypes.TransactionArgument__U8Vector)(&fullnode_network_addresses)},
-	}
-}
-
-// # Summary
-// Updates a validator's configuration. This does not reconfigure the system and will not update
-// the configuration in the validator set that is seen by other validators in the network. Can
-// only be successfully sent by a Validator Operator account that is already registered with a
-// validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It does not emit a `DiemConfig::NewEpochEvent`
-// so the copy of this config held in the validator set will not be updated, and the changes are
-// only "locally" under the `validator_account` account address.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                        |
-// | ------                        | ------       | -------------                                                                                                      |
-// | `validator_operator_account`  | `signer`     | Signer of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                          |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                               |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.             |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeRegisterValidatorConfigScriptFunction(validator_account diemtypes.AccountAddress, consensus_pubkey []byte, validator_network_addresses []byte, fullnode_network_addresses []byte) diemtypes.TransactionPayload {
+func EncodeProposeUpdateMoveLanguageVersionScriptFunction(new_version uint64, exec_delay uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "register_validator_config",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_move_language_version",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(validator_account), encode_u8vector_argument(consensus_pubkey), encode_u8vector_argument(validator_network_addresses), encode_u8vector_argument(fullnode_network_addresses)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&new_version), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
 		},
 	}
 }
 
-// # Summary
-// This script removes a validator account from the validator set, and triggers a reconfiguration
-// of the system to remove the validator from the system. This transaction can only be
-// successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script removes the account at `validator_address` from the validator set. This transaction
-// emits a `DiemConfig::NewEpochEvent` event. Once the reconfiguration triggered by this event
-// has been performed, the account at `validator_address` is no longer considered to be a
-// validator in the network. This transaction will fail if the validator at `validator_address`
-// is not in the validator set.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `&signer`    | The signer reference of the sending account of this transaction. Must be the Diem Root signer.                                    |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be removed from the validator set.                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                     |
-// | ----------------           | --------------                          | -------------                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                                  |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.      |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | The sending account is not the Diem Root account or Treasury Compliance account                |
-// | 0                          | 0                                       | The provided `validator_name` does not match the already-recorded human name for the validator. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::ENOT_AN_ACTIVE_VALIDATOR` | The validator to be removed is not in the validator set.                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                              |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                              |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`      | An invalid time value was encountered in reconfiguration. Unlikely to occur.                    |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeRemoveValidatorAndReconfigureScript(sliding_nonce uint64, validator_name []byte, validator_address diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), remove_validator_and_reconfigure_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U8Vector)(&validator_name), &diemtypes.TransactionArgument__Address{validator_address}},
-	}
-}
-
-// # Summary
-// This script removes a validator account from the validator set, and triggers a reconfiguration
-// of the system to remove the validator from the system. This transaction can only be
-// successfully called by the Diem Root account.
-//
-// # Technical Description
-// This script removes the account at `validator_address` from the validator set. This transaction
-// emits a `DiemConfig::NewEpochEvent` event. Once the reconfiguration triggered by this event
-// has been performed, the account at `validator_address` is no longer considered to be a
-// validator in the network. This transaction will fail if the validator at `validator_address`
-// is not in the validator set.
-//
-// # Parameters
-// | Name                | Type         | Description                                                                                                                        |
-// | ------              | ------       | -------------                                                                                                                      |
-// | `dr_account`        | `signer`     | The signer of the sending account of this transaction. Must be the Diem Root signer.                                               |
-// | `sliding_nonce`     | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                                         |
-// | `validator_name`    | `vector<u8>` | ASCII-encoded human name for the validator. Must match the human name in the `ValidatorConfig::ValidatorConfig` for the validator. |
-// | `validator_address` | `address`    | The validator account address to be removed from the validator set.                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                     |
-// | ----------------           | --------------                          | -------------                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `dr_account`.                                  |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.      |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | The sending account is not the Diem Root account or Treasury Compliance account                |
-// | 0                          | 0                                       | The provided `validator_name` does not match the already-recorded human name for the validator. |
-// | `Errors::INVALID_ARGUMENT` | `DiemSystem::ENOT_AN_ACTIVE_VALIDATOR` | The validator to be removed is not in the validator set.                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`            | The sending account is not the Diem Root account.                                              |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EDIEM_ROOT`                    | The sending account is not the Diem Root account.                                              |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`      | An invalid time value was encountered in reconfiguration. Unlikely to occur.                    |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeRemoveValidatorAndReconfigureScriptFunction(sliding_nonce uint64, validator_name []byte, validator_address diemtypes.AccountAddress) diemtypes.TransactionPayload {
+func EncodeProposeUpdateRewardConfigScriptFunction(reward_delay uint64, exec_delay uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "remove_validator_and_reconfigure",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_reward_config",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(validator_name), encode_address_argument(validator_address)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&reward_delay), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
 		},
 	}
 }
 
-// # Summary
-// Remove a VASP domain from parent VASP account. The transaction can only be sent by
-// the Treasury Compliance account.
-//
-// # Technical Description
-// Removes a `VASPDomain::VASPDomain` from the `domains` field of the `VASPDomain::VASPDomains` resource published under
-// account with `address`.
-//
-// # Parameters
-// | Name         | Type         | Description                                                                                     |
-// | ------       | ------       | -------------                                                                                   |
-// | `tc_account` | `signer`     | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `address`    | `address`    | The `address` of parent VASP account that will update its domains.                              |
-// | `domain`     | `vector<u8>` | The domain name.                                                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                             | Description                                                                                                                            |
-// | ----------------           | --------------                           | -------------                                                                                                                          |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`            | The sending account is not the Treasury Compliance account.                                                                            |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`    | `tc_account` is not the Treasury Compliance account.                                                                                   |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAIN_MANAGER`        | The `VASPDomain::VASPDomainManager` resource is not yet published under the Treasury Compliance account.                                 |
-// | `Errors::NOT_PUBLISHED`    | `VASPDomain::EVASP_DOMAINS_NOT_PUBLISHED` | `address` does not have a `VASPDomain::VASPDomains` resource published under it.                                                         |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EINVALID_VASP_DOMAIN`        | The `domain` is greater in length than `VASPDomain::DOMAIN_LENGTH`.                                                                        |
-// | `Errors::INVALID_ARGUMENT` | `VASPDomain::EVASP_DOMAIN_NOT_FOUND`              | The `domain` does not exist in the list of `VASPDomain::VASPDomain`s  in the `VASPDomain::VASPDomains` resource published under `address`. |
-func EncodeRemoveVaspDomainScriptFunction(address diemtypes.AccountAddress, domain []byte) diemtypes.TransactionPayload {
+func EncodeProposeUpdateTxnPublishOptionScriptFunction(script_allowed bool, module_publishing_allowed bool, exec_delay uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "remove_vasp_domain",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_txn_publish_option",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(address), encode_u8vector_argument(domain)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__Bool)(&script_allowed), (*diemtypes.TransactionArgument__Bool)(&module_publishing_allowed), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
 		},
 	}
 }
 
-// # Summary
-// Rotates the transaction sender's authentication key to the supplied new authentication key. May
-// be sent by any account.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                 |
-// | ------    | ------       | -------------                                               |
-// | `account` | `&signer`    | Signer reference of the sending account of the transaction. |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for `account`.            |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                              |
-// | ----------------           | --------------                                             | -------------                                                                            |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.     |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                         |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeRotateAuthenticationKeyScript(new_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_authentication_key_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&new_key)},
+func EncodeProposeUpdateTxnTimeoutConfigScriptFunction(duration_seconds uint64, exec_delay uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_txn_timeout_config",
+			TyArgs:   []diemtypes.TypeTag{},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&duration_seconds), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
+		},
 	}
 }
 
-// # Summary
-// Rotates the `account`'s authentication key to the supplied new authentication key. May be sent by any account.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key`
-// field to `new_key`. `new_key` must be a valid authentication key that
-// corresponds to an ed25519 public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name      | Type         | Description                                       |
-// | ------    | ------       | -------------                                     |
-// | `account` | `signer`     | Signer of the sending account of the transaction. |
-// | `new_key` | `vector<u8>` | New authentication key to be used for `account`.  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                         |
-// | ----------------           | --------------                                            | -------------                                                                       |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                    |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
+func EncodeProposeUpdateVmConfigScriptFunction(instruction_schedule []byte, native_schedule []byte, global_memory_per_byte_cost uint64, global_memory_per_byte_write_cost uint64, min_transaction_gas_units uint64, large_transaction_cutoff uint64, instrinsic_gas_per_byte uint64, maximum_number_of_gas_units uint64, min_price_per_gas_unit uint64, max_price_per_gas_unit uint64, max_transaction_size_in_bytes uint64, gas_unit_scaling_factor uint64, default_account_size uint64, exec_delay uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "OnChainConfigScripts"},
+			Function: "propose_update_vm_config",
+			TyArgs:   []diemtypes.TypeTag{},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&instruction_schedule), (*diemtypes.TransactionArgument__U8Vector)(&native_schedule), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_cost), (*diemtypes.TransactionArgument__U64)(&global_memory_per_byte_write_cost), (*diemtypes.TransactionArgument__U64)(&min_transaction_gas_units), (*diemtypes.TransactionArgument__U64)(&large_transaction_cutoff), (*diemtypes.TransactionArgument__U64)(&instrinsic_gas_per_byte), (*diemtypes.TransactionArgument__U64)(&maximum_number_of_gas_units), (*diemtypes.TransactionArgument__U64)(&min_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_price_per_gas_unit), (*diemtypes.TransactionArgument__U64)(&max_transaction_size_in_bytes), (*diemtypes.TransactionArgument__U64)(&gas_unit_scaling_factor), (*diemtypes.TransactionArgument__U64)(&default_account_size), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
+		},
+	}
+}
+
+func EncodeProposeWithdrawScriptFunction(token_t diemtypes.TypeTag, receiver diemtypes.AccountAddress, amount serde.Uint128, period uint64, exec_delay uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryScripts"},
+			Function: "propose_withdraw",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{receiver}, (*diemtypes.TransactionArgument__U128)(&amount), (*diemtypes.TransactionArgument__U64)(&period), (*diemtypes.TransactionArgument__U64)(&exec_delay)},
+		},
+	}
+}
+
+// queue agreed proposal to execute.
+func EncodeQueueProposalActionScriptFunction(token_t diemtypes.TypeTag, action_t diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Dao"},
+			Function: "queue_proposal_action",
+			TyArgs:   []diemtypes.TypeTag{token_t, action_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
+	}
+}
+
+func EncodeRegisterOracleScriptFunction(oracle_t diemtypes.TypeTag, precision uint8) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PriceOracleScripts"},
+			Function: "register_oracle",
+			TyArgs:   []diemtypes.TypeTag{oracle_t},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8)(&precision)},
+		},
+	}
+}
+
+// revoke all votes on a proposal
+func EncodeRevokeVoteScriptFunction(token diemtypes.TypeTag, action diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DaoVoteScripts"},
+			Function: "revoke_vote",
+			TyArgs:   []diemtypes.TypeTag{token, action},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
+	}
+}
+
+// revoke some votes on a proposal
+func EncodeRevokeVoteOfPowerScriptFunction(token diemtypes.TypeTag, action diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64, power serde.Uint128) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DaoVoteScripts"},
+			Function: "revoke_vote_of_power",
+			TyArgs:   []diemtypes.TypeTag{token, action},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id), (*diemtypes.TransactionArgument__U128)(&power)},
+		},
+	}
+}
+
 func EncodeRotateAuthenticationKeyScriptFunction(new_key []byte) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Account"},
 			Function: "rotate_authentication_key",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u8vector_argument(new_key)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&new_key)},
 		},
 	}
 }
 
-// # Summary
-// Rotates the sender's authentication key to the supplied new authentication key. May be sent by
-// any account that has a sliding nonce resource published under it (usually this is Treasury
-// Compliance or Diem Root accounts).
-//
-// # Technical Description
-// Rotates the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                |
-// | ------          | ------       | -------------                                                              |
-// | `account`       | `&signer`    | Signer reference of the sending account of the transaction.                |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `new_key`       | `vector<u8>` | New ed25519 public key to be used for `account`.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                           |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeRotateAuthenticationKeyWithNonceScript(sliding_nonce uint64, new_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_authentication_key_with_nonce_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U8Vector)(&new_key)},
+// a alias of execute_module_upgrade_plan_propose, will deprecated in the future.
+func EncodeSubmitModuleUpgradePlanScriptFunction(token diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "submit_module_upgrade_plan",
+			TyArgs:   []diemtypes.TypeTag{token},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
 	}
 }
 
-// # Summary
-// Rotates the sender's authentication key to the supplied new authentication key. May be sent by
-// any account that has a sliding nonce resource published under it (usually this is Treasury
-// Compliance or Diem Root accounts).
-//
-// # Technical Description
-// Rotates the `account`'s `DiemAccount::DiemAccount` `authentication_key`
-// field to `new_key`. `new_key` must be a valid authentication key that
-// corresponds to an ed25519 public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                |
-// | ------          | ------       | -------------                                                              |
-// | `account`       | `signer`     | Signer of the sending account of the transaction.                          |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `new_key`       | `vector<u8>` | New authentication key to be used for `account`.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                           |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-func EncodeRotateAuthenticationKeyWithNonceScriptFunction(sliding_nonce uint64, new_key []byte) diemtypes.TransactionPayload {
+// Directly submit a upgrade plan, the `sender`'s module upgrade plan must been PackageTxnManager::STRATEGY_TWO_PHASE and have UpgradePlanCapability
+func EncodeSubmitUpgradePlanScriptFunction(package_hash []byte, version uint64, enforced bool) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "rotate_authentication_key_with_nonce",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "submit_upgrade_plan",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(new_key)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&package_hash), (*diemtypes.TransactionArgument__U64)(&version), (*diemtypes.TransactionArgument__Bool)(&enforced)},
 		},
 	}
 }
 
-// # Summary
-// Rotates the specified account's authentication key to the supplied new authentication key. May
-// only be sent by the Diem Root account as a write set transaction.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid ed25519 public key, and `account` must not have previously delegated
-// its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                                                  |
-// | ------          | ------       | -------------                                                                                                |
-// | `dr_account`    | `&signer`    | The signer reference of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`       | `&signer`    | Signer reference of account specified in the `execute_as` field of the write set transaction.                |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.                    |
-// | `new_key`       | `vector<u8>` | New ed25519 public key to be used for `account`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                               | Description                                                                                                |
-// | ----------------           | --------------                                             | -------------                                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                             | A `SlidingNonce` resource is not published under `dr_account`.                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                             | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                             | The `sliding_nonce` in `dr_account` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                    | The `sliding_nonce` in` dr_account` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.                       |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                                           |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_recovery_address`
-func EncodeRotateAuthenticationKeyWithNonceAdminScript(sliding_nonce uint64, new_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_authentication_key_with_nonce_admin_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U8Vector)(&new_key)},
-	}
-}
-
-// # Summary
-// Rotates the specified account's authentication key to the supplied new authentication key. May
-// only be sent by the Diem Root account as a write set transaction.
-//
-// # Technical Description
-// Rotate the `account`'s `DiemAccount::DiemAccount` `authentication_key` field to `new_key`.
-// `new_key` must be a valid authentication key that corresponds to an ed25519
-// public key as described [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys),
-// and `account` must not have previously delegated its `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name            | Type         | Description                                                                                       |
-// | ------          | ------       | -------------                                                                                     |
-// | `dr_account`    | `signer`     | The signer of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`       | `signer`     | Signer of account specified in the `execute_as` field of the write set transaction.               |
-// | `sliding_nonce` | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.          |
-// | `new_key`       | `vector<u8>` | New authentication key to be used for `account`.                                                  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                              | Description                                                                                                |
-// | ----------------           | --------------                                            | -------------                                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                            | A `SlidingNonce` resource is not published under `dr_account`.                                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                            | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                            | The `sliding_nonce` in `dr_account` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`                   | The `sliding_nonce` in` dr_account` has been previously recorded.                                          |
-// | `Errors::INVALID_STATE`    | `DiemAccount::EKEY_ROTATION_CAPABILITY_ALREADY_EXTRACTED` | `account` has already delegated/extracted its `DiemAccount::KeyRotationCapability`.                        |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY`              | `new_key` was an invalid length.                                                                           |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_recovery_address`
-func EncodeRotateAuthenticationKeyWithNonceAdminScriptFunction(sliding_nonce uint64, new_key []byte) diemtypes.TransactionPayload {
+// association account should call this script after upgrade from v2 to v3.
+func EncodeTakeLinearWithdrawCapabilityScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "rotate_authentication_key_with_nonce_admin",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "StdlibUpgradeScripts"},
+			Function: "take_linear_withdraw_capability",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(new_key)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Rotates the authentication key of a specified account that is part of a recovery address to a
-// new authentication key. Only used for accounts that are part of a recovery address (see
-// `Script::add_recovery_rotation_capability` for account restrictions).
-//
-// # Technical Description
-// Rotates the authentication key of the `to_recover` account to `new_key` using the
-// `DiemAccount::KeyRotationCapability` stored in the `RecoveryAddress::RecoveryAddress` resource
-// published under `recovery_address`. This transaction can be sent either by the `to_recover`
-// account, or by the account where the `RecoveryAddress::RecoveryAddress` resource is published
-// that contains `to_recover`'s `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                                    |
-// | ------             | ------       | -------------                                                                                                                  |
-// | `account`          | `&signer`    | Signer reference of the sending account of the transaction.                                                                    |
-// | `recovery_address` | `address`    | Address where `RecoveryAddress::RecoveryAddress` that holds `to_recover`'s `DiemAccount::KeyRotationCapability` is published. |
-// | `to_recover`       | `address`    | The address of the account whose authentication key will be updated.                                                           |
-// | `new_key`          | `vector<u8>` | New ed25519 public key to be used for the account at the `to_recover` address.                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                                                                          |
-// | ----------------           | --------------                                | -------------                                                                                                                                        |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`          | `recovery_address` does not have a `RecoveryAddress::RecoveryAddress` resource published under it.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::ECANNOT_ROTATE_KEY`         | The address of `account` is not `recovery_address` or `to_recover`.                                                                                  |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EACCOUNT_NOT_RECOVERABLE`   | `to_recover`'s `DiemAccount::KeyRotationCapability`  is not in the `RecoveryAddress::RecoveryAddress`  resource published under `recovery_address`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY` | `new_key` was an invalid length.                                                                                                                     |
-//
-// # Related Scripts
-// * `Script::rotate_authentication_key`
-// * `Script::rotate_authentication_key_with_nonce`
-// * `Script::rotate_authentication_key_with_nonce_admin`
-func EncodeRotateAuthenticationKeyWithRecoveryAddressScript(recovery_address diemtypes.AccountAddress, to_recover diemtypes.AccountAddress, new_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_authentication_key_with_recovery_address_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{recovery_address}, &diemtypes.TransactionArgument__Address{to_recover}, (*diemtypes.TransactionArgument__U8Vector)(&new_key)},
+// Take Offer and put to signer's Collection<Offered>.
+func EncodeTakeOfferScriptFunction(offered diemtypes.TypeTag, offer_address diemtypes.AccountAddress) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "Offer"},
+			Function: "take_offer",
+			TyArgs:   []diemtypes.TypeTag{offered},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{offer_address}},
+		},
 	}
 }
 
-// # Summary
-// Rotates the authentication key of a specified account that is part of a recovery address to a
-// new authentication key. Only used for accounts that are part of a recovery address (see
-// `AccountAdministrationScripts::add_recovery_rotation_capability` for account restrictions).
-//
-// # Technical Description
-// Rotates the authentication key of the `to_recover` account to `new_key` using the
-// `DiemAccount::KeyRotationCapability` stored in the `RecoveryAddress::RecoveryAddress` resource
-// published under `recovery_address`. `new_key` must be a valide authentication key as described
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys).
-// This transaction can be sent either by the `to_recover` account, or by the account where the
-// `RecoveryAddress::RecoveryAddress` resource is published that contains `to_recover`'s `DiemAccount::KeyRotationCapability`.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                                   |
-// | ------             | ------       | -------------                                                                                                                 |
-// | `account`          | `signer`     | Signer of the sending account of the transaction.                                                                             |
-// | `recovery_address` | `address`    | Address where `RecoveryAddress::RecoveryAddress` that holds `to_recover`'s `DiemAccount::KeyRotationCapability` is published. |
-// | `to_recover`       | `address`    | The address of the account whose authentication key will be updated.                                                          |
-// | `new_key`          | `vector<u8>` | New authentication key to be used for the account at the `to_recover` address.                                                |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                 | Description                                                                                                                                         |
-// | ----------------           | --------------                               | -------------                                                                                                                                       |
-// | `Errors::NOT_PUBLISHED`    | `RecoveryAddress::ERECOVERY_ADDRESS`         | `recovery_address` does not have a `RecoveryAddress::RecoveryAddress` resource published under it.                                                  |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::ECANNOT_ROTATE_KEY`        | The address of `account` is not `recovery_address` or `to_recover`.                                                                                 |
-// | `Errors::INVALID_ARGUMENT` | `RecoveryAddress::EACCOUNT_NOT_RECOVERABLE`  | `to_recover`'s `DiemAccount::KeyRotationCapability`  is not in the `RecoveryAddress::RecoveryAddress`  resource published under `recovery_address`. |
-// | `Errors::INVALID_ARGUMENT` | `DiemAccount::EMALFORMED_AUTHENTICATION_KEY` | `new_key` was an invalid length.                                                                                                                    |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::rotate_authentication_key`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce`
-// * `AccountAdministrationScripts::rotate_authentication_key_with_nonce_admin`
-func EncodeRotateAuthenticationKeyWithRecoveryAddressScriptFunction(recovery_address diemtypes.AccountAddress, to_recover diemtypes.AccountAddress, new_key []byte) diemtypes.TransactionPayload {
+// Transfer NFT<NFTMeta, NFTBody> with `id` from `sender` to `receiver`
+func EncodeTransferScriptFunction(nft_meta diemtypes.TypeTag, nft_body diemtypes.TypeTag, id uint64, receiver diemtypes.AccountAddress) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "rotate_authentication_key_with_recovery_address",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "NFTGalleryScripts"},
+			Function: "transfer",
+			TyArgs:   []diemtypes.TypeTag{nft_meta, nft_body},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&id), &diemtypes.TransactionArgument__Address{receiver}},
+		},
+	}
+}
+
+func EncodeUnstakeVoteScriptFunction(token diemtypes.TypeTag, action diemtypes.TypeTag, proposer_address diemtypes.AccountAddress, proposal_id uint64) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "DaoVoteScripts"},
+			Function: "unstake_vote",
+			TyArgs:   []diemtypes.TypeTag{token, action},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{proposer_address}, (*diemtypes.TransactionArgument__U64)(&proposal_id)},
+		},
+	}
+}
+
+func EncodeUpdateScriptFunction(oracle_t diemtypes.TypeTag, value serde.Uint128) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "PriceOracleScripts"},
+			Function: "update",
+			TyArgs:   []diemtypes.TypeTag{oracle_t},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U128)(&value)},
+		},
+	}
+}
+
+// Update `sender`'s module upgrade strategy to `strategy`
+func EncodeUpdateModuleUpgradeStrategyScriptFunction(strategy uint8) diemtypes.TransactionPayload {
+	return &diemtypes.TransactionPayload__ScriptFunction{
+		diemtypes.ScriptFunction{
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ModuleUpgradeScripts"},
+			Function: "update_module_upgrade_strategy",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(recovery_address), encode_address_argument(to_recover), encode_u8vector_argument(new_key)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8)(&strategy)},
 		},
 	}
 }
 
-// # Summary
-// Updates the url used for off-chain communication, and the public key used to verify dual
-// attestation on-chain. Transaction can be sent by any account that has dual attestation
-// information published under it. In practice the only such accounts are Designated Dealers and
-// Parent VASPs.
-//
-// # Technical Description
-// Updates the `base_url` and `compliance_public_key` fields of the `DualAttestation::Credential`
-// resource published under `account`. The `new_key` must be a valid ed25519 public key.
-//
-// ## Events
-// Successful execution of this transaction emits two events:
-// * A `DualAttestation::ComplianceKeyRotationEvent` containing the new compliance public key, and
-// the blockchain time at which the key was updated emitted on the `DualAttestation::Credential`
-// `compliance_key_rotation_events` handle published under `account`; and
-// * A `DualAttestation::BaseUrlRotationEvent` containing the new base url to be used for
-// off-chain communication, and the blockchain time at which the url was updated emitted on the
-// `DualAttestation::Credential` `base_url_rotation_events` handle published under `account`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                               |
-// | ------    | ------       | -------------                                                             |
-// | `account` | `&signer`    | Signer reference of the sending account of the transaction.               |
-// | `new_url` | `vector<u8>` | ASCII-encoded url to be used for off-chain communication with `account`.  |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for on-chain dual attestation checking. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                           | Description                                                                |
-// | ----------------           | --------------                         | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`    | `DualAttestation::ECREDENTIAL`         | A `DualAttestation::Credential` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_PUBLIC_KEY` | `new_key` is not a valid ed25519 public key.                               |
-//
-// # Related Scripts
-// * `Script::create_parent_vasp_account`
-// * `Script::create_designated_dealer`
-// * `Script::rotate_dual_attestation_info`
-func EncodeRotateDualAttestationInfoScript(new_url []byte, new_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_dual_attestation_info_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&new_url), (*diemtypes.TransactionArgument__U8Vector)(&new_key)},
-	}
-}
-
-// # Summary
-// Updates the url used for off-chain communication, and the public key used to verify dual
-// attestation on-chain. Transaction can be sent by any account that has dual attestation
-// information published under it. In practice the only such accounts are Designated Dealers and
-// Parent VASPs.
-//
-// # Technical Description
-// Updates the `base_url` and `compliance_public_key` fields of the `DualAttestation::Credential`
-// resource published under `account`. The `new_key` must be a valid ed25519 public key.
-//
-// # Events
-// Successful execution of this transaction emits two events:
-// * A `DualAttestation::ComplianceKeyRotationEvent` containing the new compliance public key, and
-// the blockchain time at which the key was updated emitted on the `DualAttestation::Credential`
-// `compliance_key_rotation_events` handle published under `account`; and
-// * A `DualAttestation::BaseUrlRotationEvent` containing the new base url to be used for
-// off-chain communication, and the blockchain time at which the url was updated emitted on the
-// `DualAttestation::Credential` `base_url_rotation_events` handle published under `account`.
-//
-// # Parameters
-// | Name      | Type         | Description                                                               |
-// | ------    | ------       | -------------                                                             |
-// | `account` | `signer`     | Signer of the sending account of the transaction.                         |
-// | `new_url` | `vector<u8>` | ASCII-encoded url to be used for off-chain communication with `account`.  |
-// | `new_key` | `vector<u8>` | New ed25519 public key to be used for on-chain dual attestation checking. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                           | Description                                                                |
-// | ----------------           | --------------                         | -------------                                                              |
-// | `Errors::NOT_PUBLISHED`    | `DualAttestation::ECREDENTIAL`         | A `DualAttestation::Credential` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `DualAttestation::EINVALID_PUBLIC_KEY` | `new_key` is not a valid ed25519 public key.                               |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_parent_vasp_account`
-// * `AccountCreationScripts::create_designated_dealer`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-func EncodeRotateDualAttestationInfoScriptFunction(new_url []byte, new_key []byte) diemtypes.TransactionPayload {
+// Stdlib upgrade script from v2 to v3
+func EncodeUpgradeFromV2ToV3ScriptFunction(total_stc_amount serde.Uint128) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "rotate_dual_attestation_info",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "StdlibUpgradeScripts"},
+			Function: "upgrade_from_v2_to_v3",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u8vector_argument(new_url), encode_u8vector_argument(new_key)},
+			Args:     []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U128)(&total_stc_amount)},
 		},
 	}
 }
 
-// # Summary
-// Rotates the authentication key in a `SharedEd25519PublicKey`. This transaction can be sent by
-// any account that has previously published a shared ed25519 public key using
-// `Script::publish_shared_ed25519_public_key`.
-//
-// # Technical Description
-// This first rotates the public key stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` resource to `public_key`, after which it
-// rotates the authentication key using the capability stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` to a new value derived from `public_key`
-//
-// # Parameters
-// | Name         | Type         | Description                                                     |
-// | ------       | ------       | -------------                                                   |
-// | `account`    | `&signer`    | The signer reference of the sending account of the transaction. |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key.                                     |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                    | Description                                                                                   |
-// | ----------------           | --------------                                  | -------------                                                                                 |
-// | `Errors::NOT_PUBLISHED`    | `SharedEd25519PublicKey::ESHARED_KEY`           | A `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY` | `public_key` is an invalid ed25519 public key.                                                |
-//
-// # Related Scripts
-// * `Script::publish_shared_ed25519_public_key`
-func EncodeRotateSharedEd25519PublicKeyScript(public_key []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), rotate_shared_ed25519_public_key_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&public_key)},
-	}
-}
-
-// # Summary
-// Rotates the authentication key in a `SharedEd25519PublicKey`. This transaction can be sent by
-// any account that has previously published a shared ed25519 public key using
-// `AccountAdministrationScripts::publish_shared_ed25519_public_key`.
-//
-// # Technical Description
-// `public_key` must be a valid ed25519 public key.  This transaction first rotates the public key stored in `account`'s
-// `SharedEd25519PublicKey::SharedEd25519PublicKey` resource to `public_key`, after which it
-// rotates the `account`'s authentication key to the new authentication key derived from `public_key` as defined
-// [here](https://developers.diem.com/docs/core/accounts/#addresses-authentication-keys-and-cryptographic-keys)
-// using the `DiemAccount::KeyRotationCapability` stored in `account`'s `SharedEd25519PublicKey::SharedEd25519PublicKey`.
-//
-// # Parameters
-// | Name         | Type         | Description                                           |
-// | ------       | ------       | -------------                                         |
-// | `account`    | `signer`     | The signer of the sending account of the transaction. |
-// | `public_key` | `vector<u8>` | 32-byte Ed25519 public key.                           |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                    | Description                                                                                   |
-// | ----------------           | --------------                                  | -------------                                                                                 |
-// | `Errors::NOT_PUBLISHED`    | `SharedEd25519PublicKey::ESHARED_KEY`           | A `SharedEd25519PublicKey::SharedEd25519PublicKey` resource is not published under `account`. |
-// | `Errors::INVALID_ARGUMENT` | `SharedEd25519PublicKey::EMALFORMED_PUBLIC_KEY` | `public_key` is an invalid ed25519 public key.                                                |
-//
-// # Related Scripts
-// * `AccountAdministrationScripts::publish_shared_ed25519_public_key`
-func EncodeRotateSharedEd25519PublicKeyScriptFunction(public_key []byte) diemtypes.TransactionPayload {
+func EncodeUpgradeFromV5ToV6ScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "AccountAdministrationScripts"},
-			Function: "rotate_shared_ed25519_public_key",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "StdlibUpgradeScripts"},
+			Function: "upgrade_from_v5_to_v6",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u8vector_argument(public_key)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Updates the gas constants stored on chain and used by the VM for gas
-// metering. This transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the on-chain config holding the `DiemVMConfig` and emits a
-// `DiemConfig::NewEpochEvent` to trigger a reconfiguration of the system.
-//
-// # Parameters
-// | Name                                | Type     | Description                                                                                            |
-// | ------                              | ------   | -------------                                                                                          |
-// | `account`                           | `signer` | Signer of the sending account. Must be the Diem Root account.                                          |
-// | `sliding_nonce`                     | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                             |
-// | `global_memory_per_byte_cost`       | `u64`    | The new cost to read global memory per-byte to be used for gas metering.                               |
-// | `global_memory_per_byte_write_cost` | `u64`    | The new cost to write global memory per-byte to be used for gas metering.                              |
-// | `min_transaction_gas_units`         | `u64`    | The new flat minimum amount of gas required for any transaction.                                       |
-// | `large_transaction_cutoff`          | `u64`    | The new size over which an additional charge will be assessed for each additional byte.                |
-// | `intrinsic_gas_per_byte`            | `u64`    | The new number of units of gas that to be charged per-byte over the new `large_transaction_cutoff`.    |
-// | `maximum_number_of_gas_units`       | `u64`    | The new maximum number of gas units that can be set in a transaction.                                  |
-// | `min_price_per_gas_unit`            | `u64`    | The new minimum gas price that can be set for a transaction.                                           |
-// | `max_price_per_gas_unit`            | `u64`    | The new maximum gas price that can be set for a transaction.                                           |
-// | `max_transaction_size_in_bytes`     | `u64`    | The new maximum size of a transaction that can be processed.                                           |
-// | `gas_unit_scaling_factor`           | `u64`    | The new scaling factor to use when scaling between external and internal gas units.                    |
-// | `default_account_size`              | `u64`    | The new default account size to use when assessing final costs for reads and writes to global storage. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                | Description                                                                                |
-// | ----------------           | --------------                              | -------------                                                                              |
-// | `Errors::INVALID_ARGUMENT` | `DiemVMConfig::EGAS_CONSTANT_INCONSISTENCY` | The provided gas constants are inconsistent.                                               |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`              | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`              | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`              | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`     | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                 | `account` is not the Diem Root account.                                                    |
-func EncodeSetGasConstantsScriptFunction(sliding_nonce uint64, global_memory_per_byte_cost uint64, global_memory_per_byte_write_cost uint64, min_transaction_gas_units uint64, large_transaction_cutoff uint64, intrinsic_gas_per_byte uint64, maximum_number_of_gas_units uint64, min_price_per_gas_unit uint64, max_price_per_gas_unit uint64, max_transaction_size_in_bytes uint64, gas_unit_scaling_factor uint64, default_account_size uint64) diemtypes.TransactionPayload {
+func EncodeUpgradeFromV6ToV7ScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "SystemAdministrationScripts"},
-			Function: "set_gas_constants",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "StdlibUpgradeScripts"},
+			Function: "upgrade_from_v6_to_v7",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u64_argument(global_memory_per_byte_cost), encode_u64_argument(global_memory_per_byte_write_cost), encode_u64_argument(min_transaction_gas_units), encode_u64_argument(large_transaction_cutoff), encode_u64_argument(intrinsic_gas_per_byte), encode_u64_argument(maximum_number_of_gas_units), encode_u64_argument(min_price_per_gas_unit), encode_u64_argument(max_price_per_gas_unit), encode_u64_argument(max_transaction_size_in_bytes), encode_u64_argument(gas_unit_scaling_factor), encode_u64_argument(default_account_size)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Updates a validator's configuration, and triggers a reconfiguration of the system to update the
-// validator set with this new validator configuration.  Can only be successfully sent by a
-// Validator Operator account that is already registered with a validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It then emits a `DiemConfig::NewEpochEvent` to
-// trigger a reconfiguration of the system.  This reconfiguration will update the validator set
-// on-chain with the updated `ValidatorConfig::ValidatorConfig`.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                                  |
-// | ------                        | ------       | -------------                                                                                                                |
-// | `validator_operator_account`  | `&signer`    | Signer reference of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                                    |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                                         |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                       |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.                        |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR_OPERATOR`                   | `validator_operator_account` does not have a Validator Operator role.                                 |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`             | An invalid time value was encountered in reconfiguration. Unlikely to occur.                          |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::register_validator_config`
-func EncodeSetValidatorConfigAndReconfigureScript(validator_account diemtypes.AccountAddress, consensus_pubkey []byte, validator_network_addresses []byte, fullnode_network_addresses []byte) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), set_validator_config_and_reconfigure_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{validator_account}, (*diemtypes.TransactionArgument__U8Vector)(&consensus_pubkey), (*diemtypes.TransactionArgument__U8Vector)(&validator_network_addresses), (*diemtypes.TransactionArgument__U8Vector)(&fullnode_network_addresses)},
-	}
-}
-
-// # Summary
-// Updates a validator's configuration, and triggers a reconfiguration of the system to update the
-// validator set with this new validator configuration.  Can only be successfully sent by a
-// Validator Operator account that is already registered with a validator.
-//
-// # Technical Description
-// This updates the fields with corresponding names held in the `ValidatorConfig::ValidatorConfig`
-// config resource held under `validator_account`. It then emits a `DiemConfig::NewEpochEvent` to
-// trigger a reconfiguration of the system.  This reconfiguration will update the validator set
-// on-chain with the updated `ValidatorConfig::ValidatorConfig`.
-//
-// # Parameters
-// | Name                          | Type         | Description                                                                                                        |
-// | ------                        | ------       | -------------                                                                                                      |
-// | `validator_operator_account`  | `signer`     | Signer of the sending account. Must be the registered validator operator for the validator at `validator_address`. |
-// | `validator_account`           | `address`    | The address of the validator's `ValidatorConfig::ValidatorConfig` resource being updated.                          |
-// | `consensus_pubkey`            | `vector<u8>` | New Ed25519 public key to be used in the updated `ValidatorConfig::ValidatorConfig`.                               |
-// | `validator_network_addresses` | `vector<u8>` | New set of `validator_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.             |
-// | `fullnode_network_addresses`  | `vector<u8>` | New set of `fullnode_network_addresses` to be used in the updated `ValidatorConfig::ValidatorConfig`.              |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                   | Description                                                                                           |
-// | ----------------           | --------------                                 | -------------                                                                                         |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`           | `validator_address` does not have a `ValidatorConfig::ValidatorConfig` resource published under it.   |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR_OPERATOR`                   | `validator_operator_account` does not have a Validator Operator role.                                 |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_TRANSACTION_SENDER` | `validator_operator_account` is not the registered operator for the validator at `validator_address`. |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::EINVALID_CONSENSUS_KEY`      | `consensus_pubkey` is not a valid ed25519 public key.                                                 |
-// | `Errors::INVALID_STATE`    | `DiemConfig::EINVALID_BLOCK_TIME`             | An invalid time value was encountered in reconfiguration. Unlikely to occur.                          |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::register_validator_config`
-func EncodeSetValidatorConfigAndReconfigureScriptFunction(validator_account diemtypes.AccountAddress, consensus_pubkey []byte, validator_network_addresses []byte, fullnode_network_addresses []byte) diemtypes.TransactionPayload {
+func EncodeUpgradeFromV7ToV8ScriptFunction() diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "set_validator_config_and_reconfigure",
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "StdlibUpgradeScripts"},
+			Function: "upgrade_from_v7_to_v8",
 			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_address_argument(validator_account), encode_u8vector_argument(consensus_pubkey), encode_u8vector_argument(validator_network_addresses), encode_u8vector_argument(fullnode_network_addresses)},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by an account with
-// Validator role.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the sending validator account. The account at `operator_account` address must have
-// a Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig`
-// resource published under it. The sending `account` must be a Validator and have a
-// `ValidatorConfig::ValidatorConfig` resource published under it. This script does not emit a
-// `DiemConfig::NewEpochEvent` and no reconfiguration of the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                  |
-// | ------             | ------       | -------------                                                                                |
-// | `account`          | `&signer`    | The signer reference of the sending account of the transaction.                              |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator_with_nonce_admin`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeSetValidatorOperatorScript(operator_name []byte, operator_account diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), set_validator_operator_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U8Vector)(&operator_name), &diemtypes.TransactionArgument__Address{operator_account}},
-	}
-}
-
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by an account with
-// Validator role.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the sending validator account. The account at `operator_account` address must have
-// a Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig`
-// resource published under it. The sending `account` must be a Validator and have a
-// `ValidatorConfig::ValidatorConfig` resource published under it. This script does not emit a
-// `DiemConfig::NewEpochEvent` and no reconfiguration of the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                  |
-// | ------             | ------       | -------------                                                                                |
-// | `account`          | `signer`     | The signer of the sending account of the transaction.                                        |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator. |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator_with_nonce_admin`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeSetValidatorOperatorScriptFunction(operator_name []byte, operator_account diemtypes.AccountAddress) diemtypes.TransactionPayload {
+func EncodeWithdrawAndSplitLtWithdrawCapScriptFunction(token_t diemtypes.TypeTag, for_address diemtypes.AccountAddress, amount serde.Uint128, lock_period uint64) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "set_validator_operator",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u8vector_argument(operator_name), encode_address_argument(operator_account)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryScripts"},
+			Function: "withdraw_and_split_lt_withdraw_cap",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{&diemtypes.TransactionArgument__Address{for_address}, (*diemtypes.TransactionArgument__U128)(&amount), (*diemtypes.TransactionArgument__U64)(&lock_period)},
 		},
 	}
 }
 
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by the Diem Root
-// account as a write set transaction.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the validator `account`. The account at `operator_account` address must have a
-// Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource
-// published under it. The account represented by the `account` signer must be a Validator and
-// have a `ValidatorConfig::ValidatorConfig` resource published under it. No reconfiguration of
-// the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                                  |
-// | ------             | ------       | -------------                                                                                                |
-// | `dr_account`       | `&signer`    | The signer reference of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`          | `&signer`    | Signer reference of account specified in the `execute_as` field of the write set transaction.                |
-// | `sliding_nonce`    | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.                    |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                                             |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator.                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | A `SlidingNonce` resource is not published under `dr_account`.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                        | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                        | The `sliding_nonce` in `dr_account` is too far in the future.                                                                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`               | The `sliding_nonce` in` dr_account` has been previously recorded.                                                                                            |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | The sending account is not the Diem Root account or Treasury Compliance account                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `Script::create_validator_account`
-// * `Script::create_validator_operator_account`
-// * `Script::register_validator_config`
-// * `Script::remove_validator_and_reconfigure`
-// * `Script::add_validator_and_reconfigure`
-// * `Script::set_validator_operator`
-// * `Script::set_validator_config_and_reconfigure`
-func EncodeSetValidatorOperatorWithNonceAdminScript(sliding_nonce uint64, operator_name []byte, operator_account diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), set_validator_operator_with_nonce_admin_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U8Vector)(&operator_name), &diemtypes.TransactionArgument__Address{operator_account}},
-	}
-}
-
-// # Summary
-// Sets the validator operator for a validator in the validator's configuration resource "locally"
-// and does not reconfigure the system. Changes from this transaction will not picked up by the
-// system until a reconfiguration of the system is triggered. May only be sent by the Diem Root
-// account as a write set transaction.
-//
-// # Technical Description
-// Sets the account at `operator_account` address and with the specified `human_name` as an
-// operator for the validator `account`. The account at `operator_account` address must have a
-// Validator Operator role and have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource
-// published under it. The account represented by the `account` signer must be a Validator and
-// have a `ValidatorConfig::ValidatorConfig` resource published under it. No reconfiguration of
-// the system is initiated by this script.
-//
-// # Parameters
-// | Name               | Type         | Description                                                                                   |
-// | ------             | ------       | -------------                                                                                 |
-// | `dr_account`       | `signer`     | Signer of the sending account of the write set transaction. May only be the Diem Root signer. |
-// | `account`          | `signer`     | Signer of account specified in the `execute_as` field of the write set transaction.           |
-// | `sliding_nonce`    | `u64`        | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction for Diem Root.      |
-// | `operator_name`    | `vector<u8>` | Validator operator's human name.                                                              |
-// | `operator_account` | `address`    | Address of the validator operator account to be added as the `account` validator's operator.  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                          | Description                                                                                                                                                  |
-// | ----------------           | --------------                                        | -------------                                                                                                                                                |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | A `SlidingNonce` resource is not published under `dr_account`.                                                                                               |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                        | The `sliding_nonce` in `dr_account` is too old and it's impossible to determine if it's duplicated or not.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                        | The `sliding_nonce` in `dr_account` is too far in the future.                                                                                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`               | The `sliding_nonce` in` dr_account` has been previously recorded.                                                                                            |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                        | The sending account is not the Diem Root account or Treasury Compliance account                                                                             |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorOperatorConfig::EVALIDATOR_OPERATOR_CONFIG` | The `ValidatorOperatorConfig::ValidatorOperatorConfig` resource is not published under `operator_account`.                                                   |
-// | 0                          | 0                                                     | The `human_name` field of the `ValidatorOperatorConfig::ValidatorOperatorConfig` resource under `operator_account` does not match the provided `human_name`. |
-// | `Errors::REQUIRES_ROLE`    | `Roles::EVALIDATOR`                                   | `account` does not have a Validator account role.                                                                                                            |
-// | `Errors::INVALID_ARGUMENT` | `ValidatorConfig::ENOT_A_VALIDATOR_OPERATOR`          | The account at `operator_account` does not have a `ValidatorOperatorConfig::ValidatorOperatorConfig` resource.                                               |
-// | `Errors::NOT_PUBLISHED`    | `ValidatorConfig::EVALIDATOR_CONFIG`                  | A `ValidatorConfig::ValidatorConfig` is not published under `account`.                                                                                       |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_validator_account`
-// * `AccountCreationScripts::create_validator_operator_account`
-// * `ValidatorAdministrationScripts::register_validator_config`
-// * `ValidatorAdministrationScripts::remove_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::add_validator_and_reconfigure`
-// * `ValidatorAdministrationScripts::set_validator_operator`
-// * `ValidatorAdministrationScripts::set_validator_config_and_reconfigure`
-func EncodeSetValidatorOperatorWithNonceAdminScriptFunction(sliding_nonce uint64, operator_name []byte, operator_account diemtypes.AccountAddress) diemtypes.TransactionPayload {
+func EncodeWithdrawTokenWithLinearWithdrawCapabilityScriptFunction(token_t diemtypes.TypeTag) diemtypes.TransactionPayload {
 	return &diemtypes.TransactionPayload__ScriptFunction{
 		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "ValidatorAdministrationScripts"},
-			Function: "set_validator_operator_with_nonce_admin",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(operator_name), encode_address_argument(operator_account)},
+			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryScripts"},
+			Function: "withdraw_token_with_linear_withdraw_capability",
+			TyArgs:   []diemtypes.TypeTag{token_t},
+			Args:     []diemtypes.TransactionArgument{},
 		},
 	}
 }
 
-// # Summary
-// Mints a specified number of coins in a currency to a Designated Dealer. The sending account
-// must be the Treasury Compliance account, and coins can only be minted to a Designated Dealer
-// account.
-//
-// # Technical Description
-// Mints `mint_amount` of coins in the `CoinType` currency to Designated Dealer account at
-// `designated_dealer_address`. The `tier_index` parameter specifies which tier should be used to
-// check verify the off-chain approval policy, and is based in part on the on-chain tier values
-// for the specific Designated Dealer, and the number of `CoinType` coins that have been minted to
-// the dealer over the past 24 hours. Every Designated Dealer has 4 tiers for each currency that
-// they support. The sending `tc_account` must be the Treasury Compliance account, and the
-// receiver an authorized Designated Dealer account.
-//
-// ## Events
-// Successful execution of the transaction will emit two events:
-// * A `Diem::MintEvent` with the amount and currency code minted is emitted on the
-// `mint_event_handle` in the stored `Diem::CurrencyInfo<CoinType>` resource stored under
-// `0xA550C18`; and
-// * A `DesignatedDealer::ReceivedMintEvent` with the amount, currency code, and Designated
-// Dealer's address is emitted on the `mint_event_handle` in the stored `DesignatedDealer::Dealer`
-// resource published under the `designated_dealer_address`.
-//
-// # Parameters
-// | Name                        | Type      | Description                                                                                                |
-// | ------                      | ------    | -------------                                                                                              |
-// | `CoinType`                  | Type      | The Move type for the `CoinType` being minted. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`                | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.  |
-// | `sliding_nonce`             | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                 |
-// | `designated_dealer_address` | `address` | The address of the Designated Dealer account being minted to.                                              |
-// | `mint_amount`               | `u64`     | The number of coins to be minted.                                                                          |
-// | `tier_index`                | `u64`     | The mint tier index to use for the Designated Dealer account.                                              |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                 | Description                                                                                                                  |
-// | ----------------              | --------------                               | -------------                                                                                                                |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                                                               |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                   |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                            |
-// | `Errors::REQUIRES_ADDRESS`    | `CoreAddresses::ETREASURY_COMPLIANCE`        | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::REQUIRES_ROLE`       | `Roles::ETREASURY_COMPLIANCE`                | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_MINT_AMOUNT`     | `mint_amount` is zero.                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `DesignatedDealer::EDEALER`                  | `DesignatedDealer::Dealer` or `DesignatedDealer::TierInfo<CoinType>` resource does not exist at `designated_dealer_address`. |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_TIER_INDEX`      | The `tier_index` is out of bounds.                                                                                           |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_AMOUNT_FOR_TIER` | `mint_amount` exceeds the maximum allowed amount for `tier_index`.                                                           |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EMINT_CAPABILITY`                    | `tc_account` does not have a `Diem::MintCapability<CoinType>` resource published under it.                                  |
-// | `Errors::INVALID_STATE`       | `Diem::EMINTING_NOT_ALLOWED`                | Minting is not currently allowed for `CoinType` coins.                                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`      | The depositing of the funds would exceed the `account`'s account limits.                                                     |
-//
-// # Related Scripts
-// * `Script::create_designated_dealer`
-// * `Script::peer_to_peer_with_metadata`
-// * `Script::rotate_dual_attestation_info`
-func EncodeTieredMintScript(coin_type diemtypes.TypeTag, sliding_nonce uint64, designated_dealer_address diemtypes.AccountAddress, mint_amount uint64, tier_index uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), tiered_mint_code...),
-		TyArgs: []diemtypes.TypeTag{coin_type},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{designated_dealer_address}, (*diemtypes.TransactionArgument__U64)(&mint_amount), (*diemtypes.TransactionArgument__U64)(&tier_index)},
+func decode_accept_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__Accept
+		call.NftMeta = script.Value.TyArgs[0]
+		call.NftBody = script.Value.TyArgs[1]
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
 }
 
-// # Summary
-// Mints a specified number of coins in a currency to a Designated Dealer. The sending account
-// must be the Treasury Compliance account, and coins can only be minted to a Designated Dealer
-// account.
-//
-// # Technical Description
-// Mints `mint_amount` of coins in the `CoinType` currency to Designated Dealer account at
-// `designated_dealer_address`. The `tier_index` parameter specifies which tier should be used to
-// check verify the off-chain approval policy, and is based in part on the on-chain tier values
-// for the specific Designated Dealer, and the number of `CoinType` coins that have been minted to
-// the dealer over the past 24 hours. Every Designated Dealer has 4 tiers for each currency that
-// they support. The sending `tc_account` must be the Treasury Compliance account, and the
-// receiver an authorized Designated Dealer account.
-//
-// # Events
-// Successful execution of the transaction will emit two events:
-// * A `Diem::MintEvent` with the amount and currency code minted is emitted on the
-// `mint_event_handle` in the stored `Diem::CurrencyInfo<CoinType>` resource stored under
-// `0xA550C18`; and
-// * A `DesignatedDealer::ReceivedMintEvent` with the amount, currency code, and Designated
-// Dealer's address is emitted on the `mint_event_handle` in the stored `DesignatedDealer::Dealer`
-// resource published under the `designated_dealer_address`.
-//
-// # Parameters
-// | Name                        | Type      | Description                                                                                                |
-// | ------                      | ------    | -------------                                                                                              |
-// | `CoinType`                  | Type      | The Move type for the `CoinType` being minted. `CoinType` must be an already-registered currency on-chain. |
-// | `tc_account`                | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account.            |
-// | `sliding_nonce`             | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                 |
-// | `designated_dealer_address` | `address` | The address of the Designated Dealer account being minted to.                                              |
-// | `mint_amount`               | `u64`     | The number of coins to be minted.                                                                          |
-// | `tier_index`                | `u64`     | [Deprecated] The mint tier index to use for the Designated Dealer account. Will be ignored                 |
-//
-// # Common Abort Conditions
-// | Error Category                | Error Reason                                 | Description                                                                                                                  |
-// | ----------------              | --------------                               | -------------                                                                                                                |
-// | `Errors::NOT_PUBLISHED`       | `SlidingNonce::ESLIDING_NONCE`               | A `SlidingNonce` resource is not published under `tc_account`.                                                               |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_OLD`               | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not.                                   |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_TOO_NEW`               | The `sliding_nonce` is too far in the future.                                                                                |
-// | `Errors::INVALID_ARGUMENT`    | `SlidingNonce::ENONCE_ALREADY_RECORDED`      | The `sliding_nonce` has been previously recorded.                                                                            |
-// | `Errors::REQUIRES_ADDRESS`    | `CoreAddresses::ETREASURY_COMPLIANCE`        | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::REQUIRES_ROLE`       | `Roles::ETREASURY_COMPLIANCE`                | `tc_account` is not the Treasury Compliance account.                                                                         |
-// | `Errors::INVALID_ARGUMENT`    | `DesignatedDealer::EINVALID_MINT_AMOUNT`     | `mint_amount` is zero.                                                                                                       |
-// | `Errors::NOT_PUBLISHED`       | `DesignatedDealer::EDEALER`                  | `DesignatedDealer::Dealer` or `DesignatedDealer::TierInfo<CoinType>` resource does not exist at `designated_dealer_address`. |
-// | `Errors::REQUIRES_CAPABILITY` | `Diem::EMINT_CAPABILITY`                    | `tc_account` does not have a `Diem::MintCapability<CoinType>` resource published under it.                                  |
-// | `Errors::INVALID_STATE`       | `Diem::EMINTING_NOT_ALLOWED`                | Minting is not currently allowed for `CoinType` coins.                                                                       |
-// | `Errors::LIMIT_EXCEEDED`      | `DiemAccount::EDEPOSIT_EXCEEDS_LIMITS`      | The depositing of the funds would exceed the `account`'s account limits.                                                     |
-//
-// # Related Scripts
-// * `AccountCreationScripts::create_designated_dealer`
-// * `PaymentScripts::peer_to_peer_with_metadata`
-// * `AccountAdministrationScripts::rotate_dual_attestation_info`
-func EncodeTieredMintScriptFunction(coin_type diemtypes.TypeTag, sliding_nonce uint64, designated_dealer_address diemtypes.AccountAddress, mint_amount uint64, tier_index uint64) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "tiered_mint",
-			TyArgs:   []diemtypes.TypeTag{coin_type},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(designated_dealer_address), encode_u64_argument(mint_amount), encode_u64_argument(tier_index)},
-		},
-	}
-}
-
-// # Summary
-// Unfreezes the account at `address`. The sending account of this transaction must be the
-// Treasury Compliance account. After the successful execution of this transaction transactions
-// may be sent from the previously frozen account, and coins may be sent and received.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `false` and emits a
-// `AccountFreezing::UnFreezeAccountEvent`. The transaction sender must be the Treasury Compliance
-// account. Note that this is a per-account property so unfreezing a Parent VASP will not effect
-// the status any of its child accounts and vice versa.
-//
-// ## Events
-// Successful execution of this script will emit a `AccountFreezing::UnFreezeAccountEvent` with
-// the `unfrozen_address` set the `to_unfreeze_account`'s address.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                               |
-// | ------                | ------    | -------------                                                                                             |
-// | `tc_account`          | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `to_unfreeze_account` | `address` | The account address to be frozen.                                                                         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-//
-// # Related Scripts
-// * `Script::freeze_account`
-func EncodeUnfreezeAccountScript(sliding_nonce uint64, to_unfreeze_account diemtypes.AccountAddress) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), unfreeze_account_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), &diemtypes.TransactionArgument__Address{to_unfreeze_account}},
-	}
-}
-
-// # Summary
-// Unfreezes the account at `address`. The sending account of this transaction must be the
-// Treasury Compliance account. After the successful execution of this transaction transactions
-// may be sent from the previously frozen account, and coins may be sent and received.
-//
-// # Technical Description
-// Sets the `AccountFreezing::FreezingBit` to `false` and emits a
-// `AccountFreezing::UnFreezeAccountEvent`. The transaction sender must be the Treasury Compliance
-// account. Note that this is a per-account property so unfreezing a Parent VASP will not effect
-// the status any of its child accounts and vice versa.
-//
-// # Events
-// Successful execution of this script will emit a `AccountFreezing::UnFreezeAccountEvent` with
-// the `unfrozen_address` set the `to_unfreeze_account`'s address.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                     |
-// | ------                | ------    | -------------                                                                                   |
-// | `tc_account`          | `signer`  | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `to_unfreeze_account` | `address` | The account address to be frozen.                                                               |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | The sending account is not the Treasury Compliance account.                                |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::freeze_account`
-func EncodeUnfreezeAccountScriptFunction(sliding_nonce uint64, to_unfreeze_account diemtypes.AccountAddress) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "unfreeze_account",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_address_argument(to_unfreeze_account)},
-		},
-	}
-}
-
-// # Summary
-// Updates the Diem consensus config that is stored on-chain and is used by the Consensus.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemConsensusConfig` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system.
-//
-// # Parameters
-// | Name            | Type          | Description                                                                |
-// | ------          | ------        | -------------                                                              |
-// | `account`       | `signer`      | Signer of the sending account. Must be the Diem Root account.              |
-// | `sliding_nonce` | `u64`         | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `config`        | `vector<u8>`  | The serialized bytes of consensus config.                                  |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-func EncodeUpdateDiemConsensusConfigScriptFunction(sliding_nonce uint64, config []byte) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "SystemAdministrationScripts"},
-			Function: "update_diem_consensus_config",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u8vector_argument(config)},
-		},
-	}
-}
-
-// # Summary
-// Updates the Diem major version that is stored on-chain and is used by the VM.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemVersion` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system. The `major` version that is passed in must be strictly greater
-// than the current major version held on-chain. The VM reads this information and can use it to
-// preserve backwards compatibility with previous major versions of the VM.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                |
-// | ------          | ------    | -------------                                                              |
-// | `account`       | `&signer` | Signer reference of the sending account. Must be the Diem Root account.   |
-// | `sliding_nonce` | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `major`         | `u64`     | The `major` version of the VM to be used from this transaction on.         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                  | `account` is not the Diem Root account.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `DiemVersion::EINVALID_MAJOR_VERSION_NUMBER` | `major` is less-than or equal to the current major version stored on-chain.                |
-func EncodeUpdateDiemVersionScript(sliding_nonce uint64, major uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), update_diem_version_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U64)(&major)},
-	}
-}
-
-// # Summary
-// Updates the Diem major version that is stored on-chain and is used by the VM.  This
-// transaction can only be sent from the Diem Root account.
-//
-// # Technical Description
-// Updates the `DiemVersion` on-chain config and emits a `DiemConfig::NewEpochEvent` to trigger
-// a reconfiguration of the system. The `major` version that is passed in must be strictly greater
-// than the current major version held on-chain. The VM reads this information and can use it to
-// preserve backwards compatibility with previous major versions of the VM.
-//
-// # Parameters
-// | Name            | Type     | Description                                                                |
-// | ------          | ------   | -------------                                                              |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.              |
-// | `sliding_nonce` | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction. |
-// | `major`         | `u64`    | The `major` version of the VM to be used from this transaction on.         |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                                  | Description                                                                                |
-// | ----------------           | --------------                                | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`                | A `SlidingNonce` resource is not published under `account`.                                |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`                | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`                | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED`       | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::EDIEM_ROOT`                   | `account` is not the Diem Root account.                                                    |
-// | `Errors::INVALID_ARGUMENT` | `DiemVersion::EINVALID_MAJOR_VERSION_NUMBER`  | `major` is less-than or equal to the current major version stored on-chain.                |
-func EncodeUpdateDiemVersionScriptFunction(sliding_nonce uint64, major uint64) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "SystemAdministrationScripts"},
-			Function: "update_diem_version",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u64_argument(major)},
-		},
-	}
-}
-
-// # Summary
-// Update the dual attestation limit on-chain. Defined in terms of micro-XDX.  The transaction can
-// only be sent by the Treasury Compliance account.  After this transaction all inter-VASP
-// payments over this limit must be checked for dual attestation.
-//
-// # Technical Description
-// Updates the `micro_xdx_limit` field of the `DualAttestation::Limit` resource published under
-// `0xA550C18`. The amount is set in micro-XDX.
-//
-// # Parameters
-// | Name                  | Type      | Description                                                                                               |
-// | ------                | ------    | -------------                                                                                             |
-// | `tc_account`          | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                                |
-// | `new_micro_xdx_limit` | `u64`     | The new dual attestation limit to be used on-chain.                                                       |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-//
-// # Related Scripts
-// * `Script::update_exchange_rate`
-// * `Script::update_minting_ability`
-func EncodeUpdateDualAttestationLimitScript(sliding_nonce uint64, new_micro_xdx_limit uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), update_dual_attestation_limit_code...),
-		TyArgs: []diemtypes.TypeTag{},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U64)(&new_micro_xdx_limit)},
-	}
-}
-
-// # Summary
-// Update the dual attestation limit on-chain. Defined in terms of micro-XDX.  The transaction can
-// only be sent by the Treasury Compliance account.  After this transaction all inter-VASP
-// payments over this limit must be checked for dual attestation.
-//
-// # Technical Description
-// Updates the `micro_xdx_limit` field of the `DualAttestation::Limit` resource published under
-// `0xA550C18`. The amount is set in micro-XDX.
-//
-// # Parameters
-// | Name                  | Type     | Description                                                                                     |
-// | ------                | ------   | -------------                                                                                   |
-// | `tc_account`          | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account. |
-// | `sliding_nonce`       | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for this transaction.                      |
-// | `new_micro_xdx_limit` | `u64`    | The new dual attestation limit to be used on-chain.                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_exchange_rate`
-// * `TreasuryComplianceScripts::update_minting_ability`
-func EncodeUpdateDualAttestationLimitScriptFunction(sliding_nonce uint64, new_micro_xdx_limit uint64) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "update_dual_attestation_limit",
-			TyArgs:   []diemtypes.TypeTag{},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u64_argument(new_micro_xdx_limit)},
-		},
-	}
-}
-
-// # Summary
-// Update the rough on-chain exchange rate between a specified currency and XDX (as a conversion
-// to micro-XDX). The transaction can only be sent by the Treasury Compliance account. After this
-// transaction the updated exchange rate will be used for normalization of gas prices, and for
-// dual attestation checking.
-//
-// # Technical Description
-// Updates the on-chain exchange rate from the given `Currency` to micro-XDX.  The exchange rate
-// is given by `new_exchange_rate_numerator/new_exchange_rate_denominator`.
-//
-// # Parameters
-// | Name                            | Type      | Description                                                                                                                        |
-// | ------                          | ------    | -------------                                                                                                                      |
-// | `Currency`                      | Type      | The Move type for the `Currency` whose exchange rate is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`                    | `&signer` | The signer reference of the sending account of this transaction. Must be the Treasury Compliance account.                          |
-// | `sliding_nonce`                 | `u64`     | The `sliding_nonce` (see: `SlidingNonce`) to be used for the transaction.                                                          |
-// | `new_exchange_rate_numerator`   | `u64`     | The numerator for the new to micro-XDX exchange rate for `Currency`.                                                               |
-// | `new_exchange_rate_denominator` | `u64`     | The denominator for the new to micro-XDX exchange rate for `Currency`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`           | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::EDENOMINATOR`            | `new_exchange_rate_denominator` is zero.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-//
-// # Related Scripts
-// * `Script::update_dual_attestation_limit`
-// * `Script::update_minting_ability`
-func EncodeUpdateExchangeRateScript(currency diemtypes.TypeTag, sliding_nonce uint64, new_exchange_rate_numerator uint64, new_exchange_rate_denominator uint64) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), update_exchange_rate_code...),
-		TyArgs: []diemtypes.TypeTag{currency},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__U64)(&sliding_nonce), (*diemtypes.TransactionArgument__U64)(&new_exchange_rate_numerator), (*diemtypes.TransactionArgument__U64)(&new_exchange_rate_denominator)},
-	}
-}
-
-// # Summary
-// Update the rough on-chain exchange rate between a specified currency and XDX (as a conversion
-// to micro-XDX). The transaction can only be sent by the Treasury Compliance account. After this
-// transaction the updated exchange rate will be used for normalization of gas prices, and for
-// dual attestation checking.
-//
-// # Technical Description
-// Updates the on-chain exchange rate from the given `Currency` to micro-XDX.  The exchange rate
-// is given by `new_exchange_rate_numerator/new_exchange_rate_denominator`.
-//
-// # Parameters
-// | Name                            | Type     | Description                                                                                                                        |
-// | ------                          | ------   | -------------                                                                                                                      |
-// | `Currency`                      | Type     | The Move type for the `Currency` whose exchange rate is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `tc_account`                    | `signer` | The signer of the sending account of this transaction. Must be the Treasury Compliance account.                                    |
-// | `sliding_nonce`                 | `u64`    | The `sliding_nonce` (see: `SlidingNonce`) to be used for the transaction.                                                          |
-// | `new_exchange_rate_numerator`   | `u64`    | The numerator for the new to micro-XDX exchange rate for `Currency`.                                                               |
-// | `new_exchange_rate_denominator` | `u64`    | The denominator for the new to micro-XDX exchange rate for `Currency`.                                                             |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                            | Description                                                                                |
-// | ----------------           | --------------                          | -------------                                                                              |
-// | `Errors::NOT_PUBLISHED`    | `SlidingNonce::ESLIDING_NONCE`          | A `SlidingNonce` resource is not published under `tc_account`.                             |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_OLD`          | The `sliding_nonce` is too old and it's impossible to determine if it's duplicated or not. |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_TOO_NEW`          | The `sliding_nonce` is too far in the future.                                              |
-// | `Errors::INVALID_ARGUMENT` | `SlidingNonce::ENONCE_ALREADY_RECORDED` | The `sliding_nonce` has been previously recorded.                                          |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE`   | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::REQUIRES_ROLE`    | `Roles::ETREASURY_COMPLIANCE`           | `tc_account` is not the Treasury Compliance account.                                       |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::EDENOMINATOR`            | `new_exchange_rate_denominator` is zero.                                                   |
-// | `Errors::INVALID_ARGUMENT` | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-// | `Errors::LIMIT_EXCEEDED`   | `FixedPoint32::ERATIO_OUT_OF_RANGE`     | The quotient is unrepresentable as a `FixedPoint32`.                                       |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_dual_attestation_limit`
-// * `TreasuryComplianceScripts::update_minting_ability`
-func EncodeUpdateExchangeRateScriptFunction(currency diemtypes.TypeTag, sliding_nonce uint64, new_exchange_rate_numerator uint64, new_exchange_rate_denominator uint64) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "update_exchange_rate",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{encode_u64_argument(sliding_nonce), encode_u64_argument(new_exchange_rate_numerator), encode_u64_argument(new_exchange_rate_denominator)},
-		},
-	}
-}
-
-// # Summary
-// Script to allow or disallow minting of new coins in a specified currency.  This transaction can
-// only be sent by the Treasury Compliance account.  Turning minting off for a currency will have
-// no effect on coins already in circulation, and coins may still be removed from the system.
-//
-// # Technical Description
-// This transaction sets the `can_mint` field of the `Diem::CurrencyInfo<Currency>` resource
-// published under `0xA550C18` to the value of `allow_minting`. Minting of coins if allowed if
-// this field is set to `true` and minting of new coins in `Currency` is disallowed otherwise.
-// This transaction needs to be sent by the Treasury Compliance account.
-//
-// # Parameters
-// | Name            | Type      | Description                                                                                                                          |
-// | ------          | ------    | -------------                                                                                                                        |
-// | `Currency`      | Type      | The Move type for the `Currency` whose minting ability is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `account`       | `&signer` | Signer reference of the sending account. Must be the Diem Root account.                                                             |
-// | `allow_minting` | `bool`    | Whether to allow minting of new coins in `Currency`.                                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                          |
-// | ----------------           | --------------                        | -------------                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | `tc_account` is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `Diem::ECURRENCY_INFO`               | `Currency` is not a registered currency on-chain.    |
-//
-// # Related Scripts
-// * `Script::update_dual_attestation_limit`
-// * `Script::update_exchange_rate`
-func EncodeUpdateMintingAbilityScript(currency diemtypes.TypeTag, allow_minting bool) diemtypes.Script {
-	return diemtypes.Script{
-		Code:   append([]byte(nil), update_minting_ability_code...),
-		TyArgs: []diemtypes.TypeTag{currency},
-		Args:   []diemtypes.TransactionArgument{(*diemtypes.TransactionArgument__Bool)(&allow_minting)},
-	}
-}
-
-// # Summary
-// Script to allow or disallow minting of new coins in a specified currency.  This transaction can
-// only be sent by the Treasury Compliance account.  Turning minting off for a currency will have
-// no effect on coins already in circulation, and coins may still be removed from the system.
-//
-// # Technical Description
-// This transaction sets the `can_mint` field of the `Diem::CurrencyInfo<Currency>` resource
-// published under `0xA550C18` to the value of `allow_minting`. Minting of coins if allowed if
-// this field is set to `true` and minting of new coins in `Currency` is disallowed otherwise.
-// This transaction needs to be sent by the Treasury Compliance account.
-//
-// # Parameters
-// | Name            | Type     | Description                                                                                                                          |
-// | ------          | ------   | -------------                                                                                                                        |
-// | `Currency`      | Type     | The Move type for the `Currency` whose minting ability is being updated. `Currency` must be an already-registered currency on-chain. |
-// | `account`       | `signer` | Signer of the sending account. Must be the Diem Root account.                                                                        |
-// | `allow_minting` | `bool`   | Whether to allow minting of new coins in `Currency`.                                                                                 |
-//
-// # Common Abort Conditions
-// | Error Category             | Error Reason                          | Description                                          |
-// | ----------------           | --------------                        | -------------                                        |
-// | `Errors::REQUIRES_ADDRESS` | `CoreAddresses::ETREASURY_COMPLIANCE` | `tc_account` is not the Treasury Compliance account. |
-// | `Errors::NOT_PUBLISHED`    | `Diem::ECURRENCY_INFO`               | `Currency` is not a registered currency on-chain.    |
-//
-// # Related Scripts
-// * `TreasuryComplianceScripts::update_dual_attestation_limit`
-// * `TreasuryComplianceScripts::update_exchange_rate`
-func EncodeUpdateMintingAbilityScriptFunction(currency diemtypes.TypeTag, allow_minting bool) diemtypes.TransactionPayload {
-	return &diemtypes.TransactionPayload__ScriptFunction{
-		diemtypes.ScriptFunction{
-			Module:   diemtypes.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TreasuryComplianceScripts"},
-			Function: "update_minting_ability",
-			TyArgs:   []diemtypes.TypeTag{currency},
-			Args:     [][]byte{encode_bool_argument(allow_minting)},
-		},
-	}
-}
-
-func decode_add_currency_to_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 regular arguments")
-	}
-	var call ScriptCall__AddCurrencyToAccount
-	call.Currency = script.TyArgs[0]
-	return &call, nil
-}
-
-func decode_add_currency_to_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_accept_token_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
@@ -6910,32 +1350,73 @@ func decode_add_currency_to_account_script_function(script diemtypes.Transaction
 		if len(script.Value.Args) < 0 {
 			return nil, fmt.Errorf("Was expecting 0 regular arguments")
 		}
-		var call ScriptFunctionCall__AddCurrencyToAccount
-		call.Currency = script.Value.TyArgs[0]
+		var call ScriptFunctionCall__AcceptToken
+		call.TokenType = script.Value.TyArgs[0]
 		return &call, nil
 	default:
 		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
 }
 
-func decode_add_recovery_rotation_capability_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
+func decode_cancel_upgrade_plan_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__CancelUpgradePlan
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__AddRecoveryRotationCapability
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.RecoveryAddress = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
 }
 
-func decode_add_recovery_rotation_capability_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_cast_vote_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 4 {
+			return nil, fmt.Errorf("Was expecting 4 regular arguments")
+		}
+		var call ScriptFunctionCall__CastVote
+		call.Token = script.Value.TyArgs[0]
+		call.ActionT = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[2]); err == nil {
+			call.Agree = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[3]); err == nil {
+			call.Votes = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_convert_TwoPhaseUpgrade_to_TwoPhaseUpgradeV2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 0 {
@@ -6944,10 +1425,9 @@ func decode_add_recovery_rotation_capability_script_function(script diemtypes.Tr
 		if len(script.Value.Args) < 1 {
 			return nil, fmt.Errorf("Was expecting 1 regular arguments")
 		}
-		var call ScriptFunctionCall__AddRecoveryRotationCapability
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.RecoveryAddress = val
+		var call ScriptFunctionCall__ConvertTwoPhaseUpgradeToTwoPhaseUpgradeV2
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.PackageAddress = val
 		} else {
 			return nil, err
 		}
@@ -6958,153 +1438,7 @@ func decode_add_recovery_rotation_capability_script_function(script diemtypes.Tr
 	}
 }
 
-func decode_add_validator_and_reconfigure_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 3 {
-		return nil, fmt.Errorf("Was expecting 3 regular arguments")
-	}
-	var call ScriptCall__AddValidatorAndReconfigure
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.ValidatorName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[2]); err == nil {
-		call.ValidatorAddress = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_add_validator_and_reconfigure_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 3 {
-			return nil, fmt.Errorf("Was expecting 3 regular arguments")
-		}
-		var call ScriptFunctionCall__AddValidatorAndReconfigure
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.ValidatorName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[2]); err == nil {
-			call.ValidatorAddress = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_add_vasp_domain_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__AddVaspDomain
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.Address = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.Domain = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_burn_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__Burn
-	call.Token = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.PreburnAddress = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_burn_txn_fees_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 regular arguments")
-	}
-	var call ScriptCall__BurnTxnFees
-	call.CoinType = script.TyArgs[0]
-	return &call, nil
-}
-
-func decode_burn_txn_fees_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 type arguments")
-		}
-		if len(script.Value.Args) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 regular arguments")
-		}
-		var call ScriptFunctionCall__BurnTxnFees
-		call.CoinType = script.Value.TyArgs[0]
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_burn_with_amount_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_create_account_with_initial_amount_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
@@ -7113,23 +1447,22 @@ func decode_burn_with_amount_script_function(script diemtypes.TransactionPayload
 		if len(script.Value.Args) < 3 {
 			return nil, fmt.Errorf("Was expecting 3 regular arguments")
 		}
-		var call ScriptFunctionCall__BurnWithAmount
-		call.Token = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
+		var call ScriptFunctionCall__CreateAccountWithInitialAmount
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.FreshAddress = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.PreburnAddress = val
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.AuthKey = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeU64(); err == nil {
-			call.Amount = val
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.InitialAmount = val
 		} else {
 			return nil, err
 		}
@@ -7140,25 +1473,7 @@ func decode_burn_with_amount_script_function(script diemtypes.TransactionPayload
 	}
 }
 
-func decode_cancel_burn_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__CancelBurn
-	call.Token = script.TyArgs[0]
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.PreburnAddress = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_cancel_burn_with_amount_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_create_account_with_initial_amount_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
@@ -7167,95 +1482,16 @@ func decode_cancel_burn_with_amount_script_function(script diemtypes.Transaction
 		if len(script.Value.Args) < 2 {
 			return nil, fmt.Errorf("Was expecting 2 regular arguments")
 		}
-		var call ScriptFunctionCall__CancelBurnWithAmount
-		call.Token = script.Value.TyArgs[0]
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.PreburnAddress = val
+		var call ScriptFunctionCall__CreateAccountWithInitialAmountV2
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.FreshAddress = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
-			call.Amount = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_create_child_vasp_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__CreateChildVaspAccount
-	call.CoinType = script.TyArgs[0]
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.ChildAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.AuthKeyPrefix = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_bool_argument(script.Args[2]); err == nil {
-		call.AddAllCurrencies = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[3]); err == nil {
-		call.ChildInitialBalance = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_create_child_vasp_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 type arguments")
-		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateChildVaspAccount
-		call.CoinType = script.Value.TyArgs[0]
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.ChildAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.AuthKeyPrefix = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBool(); err == nil {
-			call.AddAllCurrencies = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeU64(); err == nil {
-			call.ChildInitialBalance = val
+		if val, err := decode_st_uint128_argument(script.Value.Args[1]); err == nil {
+			call.InitialAmount = val
 		} else {
 			return nil, err
 		}
@@ -7266,423 +1502,44 @@ func decode_create_child_vasp_account_script_function(script diemtypes.Transacti
 	}
 }
 
-func decode_create_designated_dealer_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 5 {
-		return nil, fmt.Errorf("Was expecting 5 regular arguments")
-	}
-	var call ScriptCall__CreateDesignatedDealer
-	call.Currency = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.Addr = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.AuthKeyPrefix = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.HumanName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_bool_argument(script.Args[4]); err == nil {
-		call.AddAllCurrencies = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_create_designated_dealer_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_destroy_empty_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 type arguments")
-		}
-		if len(script.Value.Args) < 5 {
-			return nil, fmt.Errorf("Was expecting 5 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateDesignatedDealer
-		call.Currency = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.Addr = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.AuthKeyPrefix = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.HumanName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[4]).DeserializeBool(); err == nil {
-			call.AddAllCurrencies = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_create_parent_vasp_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 5 {
-		return nil, fmt.Errorf("Was expecting 5 regular arguments")
-	}
-	var call ScriptCall__CreateParentVaspAccount
-	call.CoinType = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.NewAccountAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.AuthKeyPrefix = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.HumanName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_bool_argument(script.Args[4]); err == nil {
-		call.AddAllCurrencies = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_create_parent_vasp_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 type arguments")
-		}
-		if len(script.Value.Args) < 5 {
-			return nil, fmt.Errorf("Was expecting 5 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateParentVaspAccount
-		call.CoinType = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.NewAccountAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.AuthKeyPrefix = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.HumanName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[4]).DeserializeBool(); err == nil {
-			call.AddAllCurrencies = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_create_recovery_address_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 regular arguments")
-	}
-	var call ScriptCall__CreateRecoveryAddress
-	return &call, nil
-}
-
-func decode_create_recovery_address_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
 		}
 		if len(script.Value.Args) < 0 {
 			return nil, fmt.Errorf("Was expecting 0 regular arguments")
 		}
-		var call ScriptFunctionCall__CreateRecoveryAddress
+		var call ScriptFunctionCall__DestroyEmpty
+		call.NftMeta = script.Value.TyArgs[0]
+		call.NftBody = script.Value.TyArgs[1]
 		return &call, nil
 	default:
 		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
 }
 
-func decode_create_validator_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__CreateValidatorAccount
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.NewAccountAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.AuthKeyPrefix = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.HumanName = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_create_validator_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_destroy_terminated_proposal_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateValidatorAccount
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.NewAccountAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.AuthKeyPrefix = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.HumanName = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_create_validator_operator_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__CreateValidatorOperatorAccount
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.NewAccountAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.AuthKeyPrefix = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.HumanName = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_create_validator_operator_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateValidatorOperatorAccount
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.NewAccountAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.AuthKeyPrefix = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.HumanName = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_create_vasp_domains_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 regular arguments")
-		}
-		var call ScriptFunctionCall__CreateVaspDomains
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_freeze_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__FreezeAccount
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.ToFreezeAccount = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_freeze_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
 		}
 		if len(script.Value.Args) < 2 {
 			return nil, fmt.Errorf("Was expecting 2 regular arguments")
 		}
-		var call ScriptFunctionCall__FreezeAccount
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
+		var call ScriptFunctionCall__DestroyTerminatedProposal
+		call.TokenT = script.Value.TyArgs[0]
+		call.ActionT = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.ToFreezeAccount = val
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
 		} else {
 			return nil, err
 		}
@@ -7693,7 +1550,778 @@ func decode_freeze_account_script_function(script diemtypes.TransactionPayload) 
 	}
 }
 
-func decode_initialize_diem_consensus_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_disable_auto_accept_token_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__DisableAutoAcceptToken
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_empty_script_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__EmptyScript
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_enable_auto_accept_token_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__EnableAutoAcceptToken
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_execute_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__Execute
+		call.TokenT = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_execute_module_upgrade_plan_propose_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__ExecuteModuleUpgradePlanPropose
+		call.Token = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_execute_on_chain_config_proposal_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__ExecuteOnChainConfigProposal
+		call.ConfigT = script.Value.TyArgs[0]
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_execute_on_chain_config_proposal_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__ExecuteOnChainConfigProposalV2
+		call.TokenType = script.Value.TyArgs[0]
+		call.ConfigT = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_execute_withdraw_proposal_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__ExecuteWithdrawProposal
+		call.TokenT = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_flip_vote_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__FlipVote
+		call.TokenT = script.Value.TyArgs[0]
+		call.ActionT = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_init_data_source_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__InitDataSource
+		call.OracleT = script.Value.TyArgs[0]
+		if val, err := decode_st_uint128_argument(script.Value.Args[0]); err == nil {
+			call.InitValue = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_initialize_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 41 {
+			return nil, fmt.Errorf("Was expecting 41 regular arguments")
+		}
+		var call ScriptFunctionCall__Initialize
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.StdlibVersion = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.RewardDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.PreMineStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[3]); err == nil {
+			call.TimeMintStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[4]); err == nil {
+			call.TimeMintStcPeriod = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[5]); err == nil {
+			call.ParentHash = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[6]); err == nil {
+			call.AssociationAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[7]); err == nil {
+			call.GenesisAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[8]); err == nil {
+			call.ChainId = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[9]); err == nil {
+			call.GenesisTimestamp = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[10]); err == nil {
+			call.UncleRateTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[11]); err == nil {
+			call.EpochBlockCount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[12]); err == nil {
+			call.BaseBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[13]); err == nil {
+			call.BaseBlockDifficultyWindow = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[14]); err == nil {
+			call.BaseRewardPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[15]); err == nil {
+			call.BaseRewardPerUnclePercent = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[16]); err == nil {
+			call.MinBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[17]); err == nil {
+			call.MaxBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[18]); err == nil {
+			call.BaseMaxUnclesPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[19]); err == nil {
+			call.BaseBlockGasLimit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[20]); err == nil {
+			call.Strategy = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[21]); err == nil {
+			call.ScriptAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[22]); err == nil {
+			call.ModulePublishingAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[23]); err == nil {
+			call.InstructionSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[24]); err == nil {
+			call.NativeSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[25]); err == nil {
+			call.GlobalMemoryPerByteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[26]); err == nil {
+			call.GlobalMemoryPerByteWriteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[27]); err == nil {
+			call.MinTransactionGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[28]); err == nil {
+			call.LargeTransactionCutoff = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[29]); err == nil {
+			call.InstrinsicGasPerByte = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[30]); err == nil {
+			call.MaximumNumberOfGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[31]); err == nil {
+			call.MinPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[32]); err == nil {
+			call.MaxPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[33]); err == nil {
+			call.MaxTransactionSizeInBytes = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[34]); err == nil {
+			call.GasUnitScalingFactor = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[35]); err == nil {
+			call.DefaultAccountSize = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[36]); err == nil {
+			call.VotingDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[37]); err == nil {
+			call.VotingPeriod = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[38]); err == nil {
+			call.VotingQuorumRate = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[39]); err == nil {
+			call.MinActionDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[40]); err == nil {
+			call.TransactionTimeout = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_initialize_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 42 {
+			return nil, fmt.Errorf("Was expecting 42 regular arguments")
+		}
+		var call ScriptFunctionCall__InitializeV2
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.StdlibVersion = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.RewardDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.TotalStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[3]); err == nil {
+			call.PreMineStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[4]); err == nil {
+			call.TimeMintStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[5]); err == nil {
+			call.TimeMintStcPeriod = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[6]); err == nil {
+			call.ParentHash = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[7]); err == nil {
+			call.AssociationAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[8]); err == nil {
+			call.GenesisAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[9]); err == nil {
+			call.ChainId = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[10]); err == nil {
+			call.GenesisTimestamp = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[11]); err == nil {
+			call.UncleRateTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[12]); err == nil {
+			call.EpochBlockCount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[13]); err == nil {
+			call.BaseBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[14]); err == nil {
+			call.BaseBlockDifficultyWindow = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[15]); err == nil {
+			call.BaseRewardPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[16]); err == nil {
+			call.BaseRewardPerUnclePercent = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[17]); err == nil {
+			call.MinBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[18]); err == nil {
+			call.MaxBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[19]); err == nil {
+			call.BaseMaxUnclesPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[20]); err == nil {
+			call.BaseBlockGasLimit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[21]); err == nil {
+			call.Strategy = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[22]); err == nil {
+			call.ScriptAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[23]); err == nil {
+			call.ModulePublishingAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[24]); err == nil {
+			call.InstructionSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[25]); err == nil {
+			call.NativeSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[26]); err == nil {
+			call.GlobalMemoryPerByteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[27]); err == nil {
+			call.GlobalMemoryPerByteWriteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[28]); err == nil {
+			call.MinTransactionGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[29]); err == nil {
+			call.LargeTransactionCutoff = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[30]); err == nil {
+			call.InstrinsicGasPerByte = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[31]); err == nil {
+			call.MaximumNumberOfGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[32]); err == nil {
+			call.MinPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[33]); err == nil {
+			call.MaxPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[34]); err == nil {
+			call.MaxTransactionSizeInBytes = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[35]); err == nil {
+			call.GasUnitScalingFactor = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[36]); err == nil {
+			call.DefaultAccountSize = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[37]); err == nil {
+			call.VotingDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[38]); err == nil {
+			call.VotingPeriod = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[39]); err == nil {
+			call.VotingQuorumRate = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[40]); err == nil {
+			call.MinActionDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[41]); err == nil {
+			call.TransactionTimeout = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_mint_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 0 {
@@ -7702,10 +2330,9 @@ func decode_initialize_diem_consensus_config_script_function(script diemtypes.Tr
 		if len(script.Value.Args) < 1 {
 			return nil, fmt.Errorf("Was expecting 1 regular arguments")
 		}
-		var call ScriptFunctionCall__InitializeDiemConsensusConfig
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
+		var call ScriptFunctionCall__Mint
+		if val, err := decode_st_uint128_argument(script.Value.Args[0]); err == nil {
+			call.Amount = val
 		} else {
 			return nil, err
 		}
@@ -7716,7 +2343,77 @@ func decode_initialize_diem_consensus_config_script_function(script diemtypes.Tr
 	}
 }
 
-func decode_peer_to_peer_by_signers_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_peer_to_peer_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
+		}
+		var call ScriptFunctionCall__PeerToPeer
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.Payee = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.PayeeAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.Amount = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_peer_to_peer_batch_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
+		}
+		var call ScriptFunctionCall__PeerToPeerBatch
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_bytes_argument(script.Value.Args[0]); err == nil {
+			call.Payeees = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.PayeeAuthKeys = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.Amount = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_peer_to_peer_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
@@ -7725,17 +2422,16 @@ func decode_peer_to_peer_by_signers_script_function(script diemtypes.Transaction
 		if len(script.Value.Args) < 2 {
 			return nil, fmt.Errorf("Was expecting 2 regular arguments")
 		}
-		var call ScriptFunctionCall__PeerToPeerBySigners
-		call.Currency = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.Amount = val
+		var call ScriptFunctionCall__PeerToPeerV2
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.Payee = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.Metadata = val
+		if val, err := decode_st_uint128_argument(script.Value.Args[1]); err == nil {
+			call.Amount = val
 		} else {
 			return nil, err
 		}
@@ -7744,42 +2440,6 @@ func decode_peer_to_peer_by_signers_script_function(script diemtypes.Transaction
 	default:
 		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
-}
-
-func decode_peer_to_peer_with_metadata_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__PeerToPeerWithMetadata
-	call.Currency = script.TyArgs[0]
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.Payee = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[1]); err == nil {
-		call.Amount = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.Metadata = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.MetadataSignature = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
 }
 
 func decode_peer_to_peer_with_metadata_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
@@ -7792,110 +2452,244 @@ func decode_peer_to_peer_with_metadata_script_function(script diemtypes.Transact
 			return nil, fmt.Errorf("Was expecting 4 regular arguments")
 		}
 		var call ScriptFunctionCall__PeerToPeerWithMetadata
-		call.Currency = script.Value.TyArgs[0]
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
 			call.Payee = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.PayeeAuthKey = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
 			call.Amount = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
+		if val, err := decode_bytes_argument(script.Value.Args[3]); err == nil {
 			call.Metadata = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.MetadataSignature = val
-		} else {
-			return nil, err
-		}
-
 		return &call, nil
 	default:
 		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
 }
 
-func decode_preburn_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__Preburn
-	call.Token = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.Amount = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_preburn_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_peer_to_peer_with_metadata_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
 			return nil, fmt.Errorf("Was expecting 1 type arguments")
 		}
-		if len(script.Value.Args) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
 		}
-		var call ScriptFunctionCall__Preburn
-		call.Token = script.Value.TyArgs[0]
+		var call ScriptFunctionCall__PeerToPeerWithMetadataV2
+		call.TokenType = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.Payee = val
+		} else {
+			return nil, err
+		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
+		if val, err := decode_st_uint128_argument(script.Value.Args[1]); err == nil {
 			call.Amount = val
 		} else {
 			return nil, err
 		}
 
+		if val, err := decode_bytes_argument(script.Value.Args[2]); err == nil {
+			call.Metadata = val
+		} else {
+			return nil, err
+		}
+
 		return &call, nil
 	default:
 		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
 }
 
-func decode_publish_shared_ed25519_public_key_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__PublishSharedEd25519PublicKey
-	if val, err := decode_u8vector_argument(script.Args[0]); err == nil {
-		call.PublicKey = val
-	} else {
-		return nil, err
-	}
+func decode_propose_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 5 {
+			return nil, fmt.Errorf("Was expecting 5 regular arguments")
+		}
+		var call ScriptFunctionCall__Propose
+		call.TokenT = script.Value.TyArgs[0]
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.VotingDelay = val
+		} else {
+			return nil, err
+		}
 
-	return &call, nil
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.VotingPeriod = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[2]); err == nil {
+			call.VotingQuorumRate = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[3]); err == nil {
+			call.MinActionDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[4]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
 }
 
-func decode_publish_shared_ed25519_public_key_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_propose_module_upgrade_v2_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 5 {
+			return nil, fmt.Errorf("Was expecting 5 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeModuleUpgradeV2
+		call.Token = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ModuleAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.PackageHash = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[2]); err == nil {
+			call.Version = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[3]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[4]); err == nil {
+			call.Enforced = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_propose_update_consensus_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 0 {
 			return nil, fmt.Errorf("Was expecting 0 type arguments")
 		}
-		if len(script.Value.Args) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		if len(script.Value.Args) < 12 {
+			return nil, fmt.Errorf("Was expecting 12 regular arguments")
 		}
-		var call ScriptFunctionCall__PublishSharedEd25519PublicKey
+		var call ScriptFunctionCall__ProposeUpdateConsensusConfig
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.UncleRateTarget = val
+		} else {
+			return nil, err
+		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBytes(); err == nil {
-			call.PublicKey = val
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.BaseBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.BaseRewardPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[3]); err == nil {
+			call.BaseRewardPerUnclePercent = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[4]); err == nil {
+			call.EpochBlockCount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[5]); err == nil {
+			call.BaseBlockDifficultyWindow = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[6]); err == nil {
+			call.MinBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[7]); err == nil {
+			call.MaxBlockTimeTarget = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[8]); err == nil {
+			call.BaseMaxUnclesPerBlock = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[9]); err == nil {
+			call.BaseBlockGasLimit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint8_argument(script.Value.Args[10]); err == nil {
+			call.Strategy = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[11]); err == nil {
+			call.ExecDelay = val
 		} else {
 			return nil, err
 		}
@@ -7906,147 +2700,7 @@ func decode_publish_shared_ed25519_public_key_script_function(script diemtypes.T
 	}
 }
 
-func decode_register_validator_config_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__RegisterValidatorConfig
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.ValidatorAccount = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.ConsensusPubkey = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.ValidatorNetworkAddresses = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.FullnodeNetworkAddresses = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_register_validator_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
-		}
-		var call ScriptFunctionCall__RegisterValidatorConfig
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.ValidatorAccount = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.ConsensusPubkey = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.ValidatorNetworkAddresses = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.FullnodeNetworkAddresses = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_remove_validator_and_reconfigure_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 3 {
-		return nil, fmt.Errorf("Was expecting 3 regular arguments")
-	}
-	var call ScriptCall__RemoveValidatorAndReconfigure
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.ValidatorName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[2]); err == nil {
-		call.ValidatorAddress = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_remove_validator_and_reconfigure_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 3 {
-			return nil, fmt.Errorf("Was expecting 3 regular arguments")
-		}
-		var call ScriptFunctionCall__RemoveValidatorAndReconfigure
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.ValidatorName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[2]); err == nil {
-			call.ValidatorAddress = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_remove_vasp_domain_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_propose_update_move_language_version_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 0 {
@@ -8055,16 +2709,15 @@ func decode_remove_vasp_domain_script_function(script diemtypes.TransactionPaylo
 		if len(script.Value.Args) < 2 {
 			return nil, fmt.Errorf("Was expecting 2 regular arguments")
 		}
-		var call ScriptFunctionCall__RemoveVaspDomain
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.Address = val
+		var call ScriptFunctionCall__ProposeUpdateMoveLanguageVersion
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.NewVersion = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.Domain = val
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ExecDelay = val
 		} else {
 			return nil, err
 		}
@@ -8075,21 +2728,354 @@ func decode_remove_vasp_domain_script_function(script diemtypes.TransactionPaylo
 	}
 }
 
-func decode_rotate_authentication_key_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__RotateAuthenticationKey
-	if val, err := decode_u8vector_argument(script.Args[0]); err == nil {
-		call.NewKey = val
-	} else {
-		return nil, err
-	}
+func decode_propose_update_reward_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeUpdateRewardConfig
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.RewardDelay = val
+		} else {
+			return nil, err
+		}
 
-	return &call, nil
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_propose_update_txn_publish_option_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeUpdateTxnPublishOption
+		if val, err := decode_bool_argument(script.Value.Args[0]); err == nil {
+			call.ScriptAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bool_argument(script.Value.Args[1]); err == nil {
+			call.ModulePublishingAllowed = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[2]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_propose_update_txn_timeout_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeUpdateTxnTimeoutConfig
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.DurationSeconds = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_propose_update_vm_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 14 {
+			return nil, fmt.Errorf("Was expecting 14 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeUpdateVmConfig
+		if val, err := decode_bytes_argument(script.Value.Args[0]); err == nil {
+			call.InstructionSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_bytes_argument(script.Value.Args[1]); err == nil {
+			call.NativeSchedule = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[2]); err == nil {
+			call.GlobalMemoryPerByteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[3]); err == nil {
+			call.GlobalMemoryPerByteWriteCost = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[4]); err == nil {
+			call.MinTransactionGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[5]); err == nil {
+			call.LargeTransactionCutoff = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[6]); err == nil {
+			call.InstrinsicGasPerByte = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[7]); err == nil {
+			call.MaximumNumberOfGasUnits = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[8]); err == nil {
+			call.MinPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[9]); err == nil {
+			call.MaxPricePerGasUnit = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[10]); err == nil {
+			call.MaxTransactionSizeInBytes = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[11]); err == nil {
+			call.GasUnitScalingFactor = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[12]); err == nil {
+			call.DefaultAccountSize = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[13]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_propose_withdraw_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 4 {
+			return nil, fmt.Errorf("Was expecting 4 regular arguments")
+		}
+		var call ScriptFunctionCall__ProposeWithdraw
+		call.TokenT = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.Receiver = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[1]); err == nil {
+			call.Amount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[2]); err == nil {
+			call.Period = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[3]); err == nil {
+			call.ExecDelay = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_queue_proposal_action_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__QueueProposalAction
+		call.TokenT = script.Value.TyArgs[0]
+		call.ActionT = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_register_oracle_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__RegisterOracle
+		call.OracleT = script.Value.TyArgs[0]
+		if val, err := decode_st_uint8_argument(script.Value.Args[0]); err == nil {
+			call.Precision = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_revoke_vote_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__RevokeVote
+		call.Token = script.Value.TyArgs[0]
+		call.Action = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_revoke_vote_of_power_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
+		}
+		var call ScriptFunctionCall__RevokeVoteOfPower
+		call.Token = script.Value.TyArgs[0]
+		call.Action = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[2]); err == nil {
+			call.Power = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
 }
 
 func decode_rotate_authentication_key_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
@@ -8102,8 +3088,7 @@ func decode_rotate_authentication_key_script_function(script diemtypes.Transacti
 			return nil, fmt.Errorf("Was expecting 1 regular arguments")
 		}
 		var call ScriptFunctionCall__RotateAuthenticationKey
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBytes(); err == nil {
+		if val, err := decode_bytes_argument(script.Value.Args[0]); err == nil {
 			call.NewKey = val
 		} else {
 			return nil, err
@@ -8115,615 +3100,25 @@ func decode_rotate_authentication_key_script_function(script diemtypes.Transacti
 	}
 }
 
-func decode_rotate_authentication_key_with_nonce_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__RotateAuthenticationKeyWithNonce
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.NewKey = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_rotate_authentication_key_with_nonce_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__RotateAuthenticationKeyWithNonce
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.NewKey = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_rotate_authentication_key_with_nonce_admin_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__RotateAuthenticationKeyWithNonceAdmin
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.NewKey = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_rotate_authentication_key_with_nonce_admin_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__RotateAuthenticationKeyWithNonceAdmin
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.NewKey = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_rotate_authentication_key_with_recovery_address_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 3 {
-		return nil, fmt.Errorf("Was expecting 3 regular arguments")
-	}
-	var call ScriptCall__RotateAuthenticationKeyWithRecoveryAddress
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.RecoveryAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.ToRecover = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.NewKey = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_rotate_authentication_key_with_recovery_address_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 3 {
-			return nil, fmt.Errorf("Was expecting 3 regular arguments")
-		}
-		var call ScriptFunctionCall__RotateAuthenticationKeyWithRecoveryAddress
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.RecoveryAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.ToRecover = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.NewKey = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_rotate_dual_attestation_info_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__RotateDualAttestationInfo
-	if val, err := decode_u8vector_argument(script.Args[0]); err == nil {
-		call.NewUrl = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.NewKey = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_rotate_dual_attestation_info_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__RotateDualAttestationInfo
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBytes(); err == nil {
-			call.NewUrl = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.NewKey = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_rotate_shared_ed25519_public_key_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__RotateSharedEd25519PublicKey
-	if val, err := decode_u8vector_argument(script.Args[0]); err == nil {
-		call.PublicKey = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_rotate_shared_ed25519_public_key_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 regular arguments")
-		}
-		var call ScriptFunctionCall__RotateSharedEd25519PublicKey
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBytes(); err == nil {
-			call.PublicKey = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_set_gas_constants_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 12 {
-			return nil, fmt.Errorf("Was expecting 12 regular arguments")
-		}
-		var call ScriptFunctionCall__SetGasConstants
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
-			call.GlobalMemoryPerByteCost = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeU64(); err == nil {
-			call.GlobalMemoryPerByteWriteCost = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeU64(); err == nil {
-			call.MinTransactionGasUnits = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[4]).DeserializeU64(); err == nil {
-			call.LargeTransactionCutoff = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[5]).DeserializeU64(); err == nil {
-			call.IntrinsicGasPerByte = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[6]).DeserializeU64(); err == nil {
-			call.MaximumNumberOfGasUnits = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[7]).DeserializeU64(); err == nil {
-			call.MinPricePerGasUnit = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[8]).DeserializeU64(); err == nil {
-			call.MaxPricePerGasUnit = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[9]).DeserializeU64(); err == nil {
-			call.MaxTransactionSizeInBytes = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[10]).DeserializeU64(); err == nil {
-			call.GasUnitScalingFactor = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[11]).DeserializeU64(); err == nil {
-			call.DefaultAccountSize = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_set_validator_config_and_reconfigure_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__SetValidatorConfigAndReconfigure
-	if val, err := decode_address_argument(script.Args[0]); err == nil {
-		call.ValidatorAccount = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.ConsensusPubkey = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[2]); err == nil {
-		call.ValidatorNetworkAddresses = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[3]); err == nil {
-		call.FullnodeNetworkAddresses = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_set_validator_config_and_reconfigure_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
-		}
-		var call ScriptFunctionCall__SetValidatorConfigAndReconfigure
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[0]); err == nil {
-			call.ValidatorAccount = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.ConsensusPubkey = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeBytes(); err == nil {
-			call.ValidatorNetworkAddresses = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeBytes(); err == nil {
-			call.FullnodeNetworkAddresses = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_set_validator_operator_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__SetValidatorOperator
-	if val, err := decode_u8vector_argument(script.Args[0]); err == nil {
-		call.OperatorName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.OperatorAccount = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_set_validator_operator_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__SetValidatorOperator
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBytes(); err == nil {
-			call.OperatorName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.OperatorAccount = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_set_validator_operator_with_nonce_admin_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 3 {
-		return nil, fmt.Errorf("Was expecting 3 regular arguments")
-	}
-	var call ScriptCall__SetValidatorOperatorWithNonceAdmin
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u8vector_argument(script.Args[1]); err == nil {
-		call.OperatorName = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[2]); err == nil {
-		call.OperatorAccount = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_set_validator_operator_with_nonce_admin_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 3 {
-			return nil, fmt.Errorf("Was expecting 3 regular arguments")
-		}
-		var call ScriptFunctionCall__SetValidatorOperatorWithNonceAdmin
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.OperatorName = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[2]); err == nil {
-			call.OperatorAccount = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_tiered_mint_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 4 {
-		return nil, fmt.Errorf("Was expecting 4 regular arguments")
-	}
-	var call ScriptCall__TieredMint
-	call.CoinType = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.DesignatedDealerAddress = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[2]); err == nil {
-		call.MintAmount = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[3]); err == nil {
-		call.TierIndex = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_tiered_mint_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_submit_module_upgrade_plan_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
 			return nil, fmt.Errorf("Was expecting 1 type arguments")
 		}
-		if len(script.Value.Args) < 4 {
-			return nil, fmt.Errorf("Was expecting 4 regular arguments")
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
 		}
-		var call ScriptFunctionCall__TieredMint
-		call.CoinType = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
+		var call ScriptFunctionCall__SubmitModuleUpgradePlan
+		call.Token = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.DesignatedDealerAddress = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeU64(); err == nil {
-			call.MintAmount = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[3]).DeserializeU64(); err == nil {
-			call.TierIndex = val
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
 		} else {
 			return nil, err
 		}
@@ -8734,247 +3129,30 @@ func decode_tiered_mint_script_function(script diemtypes.TransactionPayload) (Sc
 	}
 }
 
-func decode_unfreeze_account_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__UnfreezeAccount
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_address_argument(script.Args[1]); err == nil {
-		call.ToUnfreezeAccount = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_unfreeze_account_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_submit_upgrade_plan_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 0 {
 			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__UnfreezeAccount
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := diemtypes.BcsDeserializeAccountAddress(script.Value.Args[1]); err == nil {
-			call.ToUnfreezeAccount = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_update_diem_consensus_config_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__UpdateDiemConsensusConfig
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeBytes(); err == nil {
-			call.Config = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_update_diem_version_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__UpdateDiemVersion
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[1]); err == nil {
-		call.Major = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_update_diem_version_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__UpdateDiemVersion
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
-			call.Major = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_update_dual_attestation_limit_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 0 {
-		return nil, fmt.Errorf("Was expecting 0 type arguments")
-	}
-	if len(script.Args) < 2 {
-		return nil, fmt.Errorf("Was expecting 2 regular arguments")
-	}
-	var call ScriptCall__UpdateDualAttestationLimit
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[1]); err == nil {
-		call.NewMicroXdxLimit = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_update_dual_attestation_limit_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 0 {
-			return nil, fmt.Errorf("Was expecting 0 type arguments")
-		}
-		if len(script.Value.Args) < 2 {
-			return nil, fmt.Errorf("Was expecting 2 regular arguments")
-		}
-		var call ScriptFunctionCall__UpdateDualAttestationLimit
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
-		} else {
-			return nil, err
-		}
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
-			call.NewMicroXdxLimit = val
-		} else {
-			return nil, err
-		}
-
-		return &call, nil
-	default:
-		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
-	}
-}
-
-func decode_update_exchange_rate_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
-	}
-	if len(script.Args) < 3 {
-		return nil, fmt.Errorf("Was expecting 3 regular arguments")
-	}
-	var call ScriptCall__UpdateExchangeRate
-	call.Currency = script.TyArgs[0]
-	if val, err := decode_u64_argument(script.Args[0]); err == nil {
-		call.SlidingNonce = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[1]); err == nil {
-		call.NewExchangeRateNumerator = val
-	} else {
-		return nil, err
-	}
-
-	if val, err := decode_u64_argument(script.Args[2]); err == nil {
-		call.NewExchangeRateDenominator = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
-}
-
-func decode_update_exchange_rate_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
-	switch script := interface{}(script).(type) {
-	case *diemtypes.TransactionPayload__ScriptFunction:
-		if len(script.Value.TyArgs) < 1 {
-			return nil, fmt.Errorf("Was expecting 1 type arguments")
 		}
 		if len(script.Value.Args) < 3 {
 			return nil, fmt.Errorf("Was expecting 3 regular arguments")
 		}
-		var call ScriptFunctionCall__UpdateExchangeRate
-		call.Currency = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeU64(); err == nil {
-			call.SlidingNonce = val
+		var call ScriptFunctionCall__SubmitUpgradePlan
+		if val, err := decode_bytes_argument(script.Value.Args[0]); err == nil {
+			call.PackageHash = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[1]).DeserializeU64(); err == nil {
-			call.NewExchangeRateNumerator = val
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.Version = val
 		} else {
 			return nil, err
 		}
 
-		if val, err := bcs.NewDeserializer(script.Value.Args[2]).DeserializeU64(); err == nil {
-			call.NewExchangeRateDenominator = val
+		if val, err := decode_bool_argument(script.Value.Args[2]); err == nil {
+			call.Enforced = val
 		} else {
 			return nil, err
 		}
@@ -8985,25 +3163,23 @@ func decode_update_exchange_rate_script_function(script diemtypes.TransactionPay
 	}
 }
 
-func decode_update_minting_ability_script(script *diemtypes.Script) (ScriptCall, error) {
-	if len(script.TyArgs) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 type arguments")
+func decode_take_linear_withdraw_capability_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__TakeLinearWithdrawCapability
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
 	}
-	if len(script.Args) < 1 {
-		return nil, fmt.Errorf("Was expecting 1 regular arguments")
-	}
-	var call ScriptCall__UpdateMintingAbility
-	call.Currency = script.TyArgs[0]
-	if val, err := decode_bool_argument(script.Args[0]); err == nil {
-		call.AllowMinting = val
-	} else {
-		return nil, err
-	}
-
-	return &call, nil
 }
 
-func decode_update_minting_ability_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+func decode_take_offer_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
 	switch script := interface{}(script).(type) {
 	case *diemtypes.TransactionPayload__ScriptFunction:
 		if len(script.Value.TyArgs) < 1 {
@@ -9012,11 +3188,10 @@ func decode_update_minting_ability_script_function(script diemtypes.TransactionP
 		if len(script.Value.Args) < 1 {
 			return nil, fmt.Errorf("Was expecting 1 regular arguments")
 		}
-		var call ScriptFunctionCall__UpdateMintingAbility
-		call.Currency = script.Value.TyArgs[0]
-
-		if val, err := bcs.NewDeserializer(script.Value.Args[0]).DeserializeBool(); err == nil {
-			call.AllowMinting = val
+		var call ScriptFunctionCall__TakeOffer
+		call.Offered = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.OfferAddress = val
 		} else {
 			return nil, err
 		}
@@ -9027,190 +3202,291 @@ func decode_update_minting_ability_script_function(script diemtypes.TransactionP
 	}
 }
 
-var add_currency_to_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 3, 2, 6, 4, 8, 2, 5, 10, 7, 7, 17, 25, 8, 42, 16, 0, 0, 0, 1, 0, 1, 1, 1, 0, 2, 1, 6, 12, 0, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 97, 100, 100, 95, 99, 117, 114, 114, 101, 110, 99, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 3, 11, 0, 56, 0, 2}
+func decode_transfer_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__Transfer
+		call.NftMeta = script.Value.TyArgs[0]
+		call.NftBody = script.Value.TyArgs[1]
+		if val, err := decode_st_uint64_argument(script.Value.Args[0]); err == nil {
+			call.Id = val
+		} else {
+			return nil, err
+		}
 
-var add_recovery_rotation_capability_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 2, 4, 4, 3, 8, 10, 5, 18, 15, 7, 33, 106, 8, 139, 1, 16, 0, 0, 0, 1, 0, 2, 1, 0, 0, 3, 0, 1, 0, 1, 4, 2, 3, 0, 1, 6, 12, 1, 8, 0, 2, 8, 0, 5, 0, 2, 6, 12, 5, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 15, 82, 101, 99, 111, 118, 101, 114, 121, 65, 100, 100, 114, 101, 115, 115, 21, 75, 101, 121, 82, 111, 116, 97, 116, 105, 111, 110, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 101, 120, 116, 114, 97, 99, 116, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 23, 97, 100, 100, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 3, 5, 11, 0, 17, 0, 10, 1, 17, 1, 2}
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[1]); err == nil {
+			call.Receiver = val
+		} else {
+			return nil, err
+		}
 
-var add_validator_and_reconfigure_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 6, 3, 6, 15, 5, 21, 24, 7, 45, 91, 8, 136, 1, 16, 0, 0, 0, 1, 0, 2, 1, 3, 0, 1, 0, 2, 4, 2, 3, 0, 0, 5, 4, 1, 0, 2, 6, 12, 3, 0, 1, 5, 1, 10, 2, 2, 6, 12, 5, 4, 6, 12, 3, 10, 2, 5, 2, 1, 3, 10, 68, 105, 101, 109, 83, 121, 115, 116, 101, 109, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 14, 103, 101, 116, 95, 104, 117, 109, 97, 110, 95, 110, 97, 109, 101, 13, 97, 100, 100, 95, 118, 97, 108, 105, 100, 97, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 6, 18, 10, 0, 10, 1, 17, 0, 10, 3, 17, 1, 11, 2, 33, 12, 4, 11, 4, 3, 14, 11, 0, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, 39, 11, 0, 10, 3, 17, 2, 2}
-
-var burn_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 17, 7, 34, 45, 8, 79, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 1, 1, 1, 4, 2, 6, 12, 3, 0, 2, 6, 12, 5, 3, 6, 12, 3, 5, 1, 9, 0, 4, 68, 105, 101, 109, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 4, 98, 117, 114, 110, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 1, 7, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 56, 0, 2}
-
-var burn_txn_fees_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 3, 2, 6, 4, 8, 2, 5, 10, 7, 7, 17, 25, 8, 42, 16, 0, 0, 0, 1, 0, 1, 1, 1, 0, 2, 1, 6, 12, 0, 1, 9, 0, 14, 84, 114, 97, 110, 115, 97, 99, 116, 105, 111, 110, 70, 101, 101, 9, 98, 117, 114, 110, 95, 102, 101, 101, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 3, 11, 0, 56, 0, 2}
-
-var cancel_burn_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 3, 2, 6, 4, 8, 2, 5, 10, 8, 7, 18, 24, 8, 42, 16, 0, 0, 0, 1, 0, 1, 1, 1, 0, 2, 2, 6, 12, 5, 0, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 11, 99, 97, 110, 99, 101, 108, 95, 98, 117, 114, 110, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 4, 11, 0, 10, 1, 56, 0, 2}
-
-var create_child_vasp_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 8, 1, 0, 2, 2, 2, 4, 3, 6, 22, 4, 28, 4, 5, 32, 35, 7, 67, 122, 8, 189, 1, 16, 6, 205, 1, 4, 0, 0, 0, 1, 1, 0, 0, 2, 0, 1, 1, 1, 0, 3, 2, 3, 0, 0, 4, 4, 1, 1, 1, 0, 5, 3, 1, 0, 0, 6, 2, 6, 4, 6, 12, 5, 10, 2, 1, 0, 1, 6, 12, 1, 8, 0, 5, 6, 8, 0, 5, 3, 10, 2, 10, 2, 5, 6, 12, 5, 10, 2, 1, 3, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 18, 87, 105, 116, 104, 100, 114, 97, 119, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 25, 99, 114, 101, 97, 116, 101, 95, 99, 104, 105, 108, 100, 95, 118, 97, 115, 112, 95, 97, 99, 99, 111, 117, 110, 116, 27, 101, 120, 116, 114, 97, 99, 116, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 8, 112, 97, 121, 95, 102, 114, 111, 109, 27, 114, 101, 115, 116, 111, 114, 101, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 10, 2, 1, 0, 1, 1, 5, 3, 25, 10, 0, 10, 1, 11, 2, 10, 3, 56, 0, 10, 4, 6, 0, 0, 0, 0, 0, 0, 0, 0, 36, 3, 10, 5, 22, 11, 0, 17, 1, 12, 5, 14, 5, 10, 1, 10, 4, 7, 0, 7, 0, 56, 1, 11, 5, 17, 3, 5, 24, 11, 0, 1, 2}
-
-var create_designated_dealer_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 27, 7, 44, 72, 8, 116, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 1, 1, 1, 4, 2, 6, 12, 3, 0, 5, 6, 12, 5, 10, 2, 10, 2, 1, 6, 6, 12, 3, 5, 10, 2, 10, 2, 1, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 24, 99, 114, 101, 97, 116, 101, 95, 100, 101, 115, 105, 103, 110, 97, 116, 101, 100, 95, 100, 101, 97, 108, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 1, 10, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 11, 3, 11, 4, 10, 5, 56, 0, 2}
-
-var create_parent_vasp_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 27, 7, 44, 74, 8, 118, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 1, 1, 1, 4, 2, 6, 12, 3, 0, 5, 6, 12, 5, 10, 2, 10, 2, 1, 6, 6, 12, 3, 5, 10, 2, 10, 2, 1, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 26, 99, 114, 101, 97, 116, 101, 95, 112, 97, 114, 101, 110, 116, 95, 118, 97, 115, 112, 95, 97, 99, 99, 111, 117, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 1, 10, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 11, 3, 11, 4, 10, 5, 56, 0, 2}
-
-var create_recovery_address_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 2, 4, 4, 3, 8, 10, 5, 18, 12, 7, 30, 90, 8, 120, 16, 0, 0, 0, 1, 0, 2, 1, 0, 0, 3, 0, 1, 0, 1, 4, 2, 3, 0, 1, 6, 12, 1, 8, 0, 2, 6, 12, 8, 0, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 15, 82, 101, 99, 111, 118, 101, 114, 121, 65, 100, 100, 114, 101, 115, 115, 21, 75, 101, 121, 82, 111, 116, 97, 116, 105, 111, 110, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 101, 120, 116, 114, 97, 99, 116, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 7, 112, 117, 98, 108, 105, 115, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 5, 10, 0, 11, 0, 17, 0, 17, 1, 2}
-
-var create_validator_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 22, 7, 36, 72, 8, 108, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 0, 2, 6, 12, 3, 0, 4, 6, 12, 5, 10, 2, 10, 2, 5, 6, 12, 3, 5, 10, 2, 10, 2, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 24, 99, 114, 101, 97, 116, 101, 95, 118, 97, 108, 105, 100, 97, 116, 111, 114, 95, 97, 99, 99, 111, 117, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 9, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 11, 3, 11, 4, 17, 1, 2}
-
-var create_validator_operator_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 22, 7, 36, 81, 8, 117, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 0, 2, 6, 12, 3, 0, 4, 6, 12, 5, 10, 2, 10, 2, 5, 6, 12, 3, 5, 10, 2, 10, 2, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 33, 99, 114, 101, 97, 116, 101, 95, 118, 97, 108, 105, 100, 97, 116, 111, 114, 95, 111, 112, 101, 114, 97, 116, 111, 114, 95, 97, 99, 99, 111, 117, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 9, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 11, 3, 11, 4, 17, 1, 2}
-
-var freeze_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 14, 7, 28, 66, 8, 94, 16, 0, 0, 0, 1, 0, 2, 0, 1, 0, 1, 3, 2, 1, 0, 2, 6, 12, 5, 0, 2, 6, 12, 3, 3, 6, 12, 3, 5, 15, 65, 99, 99, 111, 117, 110, 116, 70, 114, 101, 101, 122, 105, 110, 103, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 14, 102, 114, 101, 101, 122, 101, 95, 97, 99, 99, 111, 117, 110, 116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 7, 10, 0, 10, 1, 17, 1, 11, 0, 10, 2, 17, 0, 2}
-
-var peer_to_peer_with_metadata_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 7, 1, 0, 2, 2, 2, 4, 3, 6, 16, 4, 22, 2, 5, 24, 29, 7, 53, 96, 8, 149, 1, 16, 0, 0, 0, 1, 1, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 1, 1, 0, 4, 1, 3, 0, 1, 5, 1, 6, 12, 1, 8, 0, 5, 6, 8, 0, 5, 3, 10, 2, 10, 2, 0, 5, 6, 12, 5, 3, 10, 2, 10, 2, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 18, 87, 105, 116, 104, 100, 114, 97, 119, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 27, 101, 120, 116, 114, 97, 99, 116, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 8, 112, 97, 121, 95, 102, 114, 111, 109, 27, 114, 101, 115, 116, 111, 114, 101, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 1, 12, 11, 0, 17, 0, 12, 5, 14, 5, 10, 1, 10, 2, 11, 3, 11, 4, 56, 0, 11, 5, 17, 2, 2}
-
-var preburn_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 7, 1, 0, 2, 2, 2, 4, 3, 6, 16, 4, 22, 2, 5, 24, 21, 7, 45, 95, 8, 140, 1, 16, 0, 0, 0, 1, 1, 0, 0, 2, 0, 1, 0, 0, 3, 2, 3, 1, 1, 0, 4, 1, 3, 0, 1, 5, 1, 6, 12, 1, 8, 0, 3, 6, 12, 6, 8, 0, 3, 0, 2, 6, 12, 3, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 18, 87, 105, 116, 104, 100, 114, 97, 119, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 27, 101, 120, 116, 114, 97, 99, 116, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 7, 112, 114, 101, 98, 117, 114, 110, 27, 114, 101, 115, 116, 111, 114, 101, 95, 119, 105, 116, 104, 100, 114, 97, 119, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 1, 10, 10, 0, 17, 0, 12, 2, 11, 0, 14, 2, 10, 1, 56, 0, 11, 2, 17, 2, 2}
-
-var publish_shared_ed25519_public_key_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 31, 8, 44, 16, 0, 0, 0, 1, 0, 1, 0, 2, 6, 12, 10, 2, 0, 22, 83, 104, 97, 114, 101, 100, 69, 100, 50, 53, 53, 49, 57, 80, 117, 98, 108, 105, 99, 75, 101, 121, 7, 112, 117, 98, 108, 105, 115, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 4, 11, 0, 11, 1, 17, 0, 2}
-
-var register_validator_config_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 11, 7, 18, 27, 8, 45, 16, 0, 0, 0, 1, 0, 1, 0, 5, 6, 12, 5, 10, 2, 10, 2, 10, 2, 0, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 10, 115, 101, 116, 95, 99, 111, 110, 102, 105, 103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 7, 11, 0, 10, 1, 11, 2, 11, 3, 11, 4, 17, 0, 2}
-
-var remove_validator_and_reconfigure_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 6, 3, 6, 15, 5, 21, 24, 7, 45, 94, 8, 139, 1, 16, 0, 0, 0, 1, 0, 2, 1, 3, 0, 1, 0, 2, 4, 2, 3, 0, 0, 5, 4, 1, 0, 2, 6, 12, 3, 0, 1, 5, 1, 10, 2, 2, 6, 12, 5, 4, 6, 12, 3, 10, 2, 5, 2, 1, 3, 10, 68, 105, 101, 109, 83, 121, 115, 116, 101, 109, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 14, 103, 101, 116, 95, 104, 117, 109, 97, 110, 95, 110, 97, 109, 101, 16, 114, 101, 109, 111, 118, 101, 95, 118, 97, 108, 105, 100, 97, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 6, 18, 10, 0, 10, 1, 17, 0, 10, 3, 17, 1, 11, 2, 33, 12, 4, 11, 4, 3, 14, 11, 0, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, 39, 11, 0, 10, 3, 17, 2, 2}
-
-var rotate_authentication_key_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 2, 2, 4, 3, 6, 15, 5, 21, 18, 7, 39, 124, 8, 163, 1, 16, 0, 0, 0, 1, 1, 0, 0, 2, 0, 1, 0, 0, 3, 1, 2, 0, 0, 4, 3, 2, 0, 1, 6, 12, 1, 8, 0, 0, 2, 6, 8, 0, 10, 2, 2, 6, 12, 10, 2, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 21, 75, 101, 121, 82, 111, 116, 97, 116, 105, 111, 110, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 101, 120, 116, 114, 97, 99, 116, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 114, 101, 115, 116, 111, 114, 101, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 25, 114, 111, 116, 97, 116, 101, 95, 97, 117, 116, 104, 101, 110, 116, 105, 99, 97, 116, 105, 111, 110, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 1, 9, 11, 0, 17, 0, 12, 2, 14, 2, 11, 1, 17, 2, 11, 2, 17, 1, 2}
-
-var rotate_authentication_key_with_nonce_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 2, 4, 4, 3, 8, 20, 5, 28, 23, 7, 51, 159, 1, 8, 210, 1, 16, 0, 0, 0, 1, 0, 3, 1, 0, 1, 2, 0, 1, 0, 0, 4, 2, 3, 0, 0, 5, 3, 1, 0, 0, 6, 4, 1, 0, 2, 6, 12, 3, 0, 1, 6, 12, 1, 8, 0, 2, 6, 8, 0, 10, 2, 3, 6, 12, 3, 10, 2, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 21, 75, 101, 121, 82, 111, 116, 97, 116, 105, 111, 110, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 101, 120, 116, 114, 97, 99, 116, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 114, 101, 115, 116, 111, 114, 101, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 25, 114, 111, 116, 97, 116, 101, 95, 97, 117, 116, 104, 101, 110, 116, 105, 99, 97, 116, 105, 111, 110, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 3, 12, 10, 0, 10, 1, 17, 0, 11, 0, 17, 1, 12, 3, 14, 3, 11, 2, 17, 3, 11, 3, 17, 2, 2}
-
-var rotate_authentication_key_with_nonce_admin_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 2, 4, 4, 3, 8, 20, 5, 28, 25, 7, 53, 159, 1, 8, 212, 1, 16, 0, 0, 0, 1, 0, 3, 1, 0, 1, 2, 0, 1, 0, 0, 4, 2, 3, 0, 0, 5, 3, 1, 0, 0, 6, 4, 1, 0, 2, 6, 12, 3, 0, 1, 6, 12, 1, 8, 0, 2, 6, 8, 0, 10, 2, 4, 6, 12, 6, 12, 3, 10, 2, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 21, 75, 101, 121, 82, 111, 116, 97, 116, 105, 111, 110, 67, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 101, 120, 116, 114, 97, 99, 116, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 31, 114, 101, 115, 116, 111, 114, 101, 95, 107, 101, 121, 95, 114, 111, 116, 97, 116, 105, 111, 110, 95, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 25, 114, 111, 116, 97, 116, 101, 95, 97, 117, 116, 104, 101, 110, 116, 105, 99, 97, 116, 105, 111, 110, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 3, 12, 11, 0, 10, 2, 17, 0, 11, 1, 17, 1, 12, 4, 14, 4, 11, 3, 17, 3, 11, 4, 17, 2, 2}
-
-var rotate_authentication_key_with_recovery_address_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 8, 7, 15, 42, 8, 57, 16, 0, 0, 0, 1, 0, 1, 0, 4, 6, 12, 5, 5, 10, 2, 0, 15, 82, 101, 99, 111, 118, 101, 114, 121, 65, 100, 100, 114, 101, 115, 115, 25, 114, 111, 116, 97, 116, 101, 95, 97, 117, 116, 104, 101, 110, 116, 105, 99, 97, 116, 105, 111, 110, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 6, 11, 0, 10, 1, 10, 2, 11, 3, 17, 0, 2}
-
-var rotate_dual_attestation_info_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 10, 5, 12, 13, 7, 25, 61, 8, 86, 16, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 1, 0, 2, 6, 12, 10, 2, 0, 3, 6, 12, 10, 2, 10, 2, 15, 68, 117, 97, 108, 65, 116, 116, 101, 115, 116, 97, 116, 105, 111, 110, 15, 114, 111, 116, 97, 116, 101, 95, 98, 97, 115, 101, 95, 117, 114, 108, 28, 114, 111, 116, 97, 116, 101, 95, 99, 111, 109, 112, 108, 105, 97, 110, 99, 101, 95, 112, 117, 98, 108, 105, 99, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 1, 7, 10, 0, 11, 1, 17, 0, 11, 0, 11, 2, 17, 1, 2}
-
-var rotate_shared_ed25519_public_key_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 2, 3, 2, 5, 5, 7, 6, 7, 13, 34, 8, 47, 16, 0, 0, 0, 1, 0, 1, 0, 2, 6, 12, 10, 2, 0, 22, 83, 104, 97, 114, 101, 100, 69, 100, 50, 53, 53, 49, 57, 80, 117, 98, 108, 105, 99, 75, 101, 121, 10, 114, 111, 116, 97, 116, 101, 95, 107, 101, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 4, 11, 0, 11, 1, 17, 0, 2}
-
-var set_validator_config_and_reconfigure_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 15, 7, 29, 68, 8, 97, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 0, 5, 6, 12, 5, 10, 2, 10, 2, 10, 2, 0, 2, 6, 12, 5, 10, 68, 105, 101, 109, 83, 121, 115, 116, 101, 109, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 10, 115, 101, 116, 95, 99, 111, 110, 102, 105, 103, 29, 117, 112, 100, 97, 116, 101, 95, 99, 111, 110, 102, 105, 103, 95, 97, 110, 100, 95, 114, 101, 99, 111, 110, 102, 105, 103, 117, 114, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 10, 10, 0, 10, 1, 11, 2, 11, 3, 11, 4, 17, 0, 11, 0, 10, 1, 17, 1, 2}
-
-var set_validator_operator_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 19, 7, 33, 68, 8, 101, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 3, 0, 1, 5, 1, 10, 2, 2, 6, 12, 5, 0, 3, 6, 12, 10, 2, 5, 2, 1, 3, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 23, 86, 97, 108, 105, 100, 97, 116, 111, 114, 79, 112, 101, 114, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 14, 103, 101, 116, 95, 104, 117, 109, 97, 110, 95, 110, 97, 109, 101, 12, 115, 101, 116, 95, 111, 112, 101, 114, 97, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 5, 15, 10, 2, 17, 0, 11, 1, 33, 12, 3, 11, 3, 3, 11, 11, 0, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, 39, 11, 0, 10, 2, 17, 1, 2}
-
-var set_validator_operator_with_nonce_admin_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 6, 3, 6, 15, 5, 21, 26, 7, 47, 103, 8, 150, 1, 16, 0, 0, 0, 1, 0, 2, 0, 3, 0, 1, 0, 2, 4, 2, 3, 0, 1, 5, 4, 1, 0, 2, 6, 12, 3, 0, 1, 5, 1, 10, 2, 2, 6, 12, 5, 5, 6, 12, 6, 12, 3, 10, 2, 5, 2, 1, 3, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 15, 86, 97, 108, 105, 100, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 23, 86, 97, 108, 105, 100, 97, 116, 111, 114, 79, 112, 101, 114, 97, 116, 111, 114, 67, 111, 110, 102, 105, 103, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 14, 103, 101, 116, 95, 104, 117, 109, 97, 110, 95, 110, 97, 109, 101, 12, 115, 101, 116, 95, 111, 112, 101, 114, 97, 116, 111, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 6, 18, 11, 0, 10, 2, 17, 0, 10, 4, 17, 1, 11, 3, 33, 12, 5, 11, 5, 3, 14, 11, 1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, 39, 11, 1, 10, 4, 17, 2, 2}
-
-var tiered_mint_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 4, 3, 4, 11, 4, 15, 2, 5, 17, 21, 7, 38, 59, 8, 97, 16, 0, 0, 0, 1, 1, 2, 0, 1, 0, 0, 3, 2, 1, 1, 1, 1, 4, 2, 6, 12, 3, 0, 4, 6, 12, 5, 3, 3, 5, 6, 12, 3, 5, 3, 3, 1, 9, 0, 11, 68, 105, 101, 109, 65, 99, 99, 111, 117, 110, 116, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 11, 116, 105, 101, 114, 101, 100, 95, 109, 105, 110, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 1, 9, 10, 0, 10, 1, 17, 0, 11, 0, 10, 2, 10, 3, 10, 4, 56, 0, 2}
-
-var unfreeze_account_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 14, 7, 28, 68, 8, 96, 16, 0, 0, 0, 1, 0, 2, 0, 1, 0, 1, 3, 2, 1, 0, 2, 6, 12, 5, 0, 2, 6, 12, 3, 3, 6, 12, 3, 5, 15, 65, 99, 99, 111, 117, 110, 116, 70, 114, 101, 101, 122, 105, 110, 103, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 16, 117, 110, 102, 114, 101, 101, 122, 101, 95, 97, 99, 99, 111, 117, 110, 116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 1, 7, 10, 0, 10, 1, 17, 1, 11, 0, 10, 2, 17, 0, 2}
-
-var update_diem_version_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 10, 7, 24, 51, 8, 75, 16, 0, 0, 0, 1, 0, 2, 0, 1, 0, 1, 3, 0, 1, 0, 2, 6, 12, 3, 0, 3, 6, 12, 3, 3, 11, 68, 105, 101, 109, 86, 101, 114, 115, 105, 111, 110, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 3, 115, 101, 116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 1, 7, 10, 0, 10, 1, 17, 1, 11, 0, 10, 2, 17, 0, 2}
-
-var update_dual_attestation_limit_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 5, 1, 0, 4, 3, 4, 10, 5, 14, 10, 7, 24, 71, 8, 95, 16, 0, 0, 0, 1, 0, 2, 0, 1, 0, 1, 3, 0, 1, 0, 2, 6, 12, 3, 0, 3, 6, 12, 3, 3, 15, 68, 117, 97, 108, 65, 116, 116, 101, 115, 116, 97, 116, 105, 111, 110, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 19, 115, 101, 116, 95, 109, 105, 99, 114, 111, 100, 105, 101, 109, 95, 108, 105, 109, 105, 116, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 1, 7, 10, 0, 10, 1, 17, 1, 11, 0, 10, 2, 17, 0, 2}
-
-var update_exchange_rate_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 7, 1, 0, 6, 2, 6, 4, 3, 10, 16, 4, 26, 2, 5, 28, 25, 7, 53, 99, 8, 152, 1, 16, 0, 0, 0, 1, 0, 2, 1, 1, 2, 0, 1, 3, 0, 1, 0, 2, 4, 2, 3, 0, 0, 5, 4, 3, 1, 1, 2, 6, 2, 3, 3, 1, 8, 0, 2, 6, 12, 3, 0, 2, 6, 12, 8, 0, 4, 6, 12, 3, 3, 3, 1, 9, 0, 4, 68, 105, 101, 109, 12, 70, 105, 120, 101, 100, 80, 111, 105, 110, 116, 51, 50, 12, 83, 108, 105, 100, 105, 110, 103, 78, 111, 110, 99, 101, 20, 99, 114, 101, 97, 116, 101, 95, 102, 114, 111, 109, 95, 114, 97, 116, 105, 111, 110, 97, 108, 21, 114, 101, 99, 111, 114, 100, 95, 110, 111, 110, 99, 101, 95, 111, 114, 95, 97, 98, 111, 114, 116, 24, 117, 112, 100, 97, 116, 101, 95, 120, 100, 120, 95, 101, 120, 99, 104, 97, 110, 103, 101, 95, 114, 97, 116, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 5, 1, 11, 10, 0, 10, 1, 17, 1, 10, 2, 10, 3, 17, 0, 12, 4, 11, 0, 11, 4, 56, 0, 2}
-
-var update_minting_ability_code = []byte{161, 28, 235, 11, 1, 0, 0, 0, 6, 1, 0, 2, 3, 2, 6, 4, 8, 2, 5, 10, 8, 7, 18, 28, 8, 46, 16, 0, 0, 0, 1, 0, 1, 1, 1, 0, 2, 2, 6, 12, 1, 0, 1, 9, 0, 4, 68, 105, 101, 109, 22, 117, 112, 100, 97, 116, 101, 95, 109, 105, 110, 116, 105, 110, 103, 95, 97, 98, 105, 108, 105, 116, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 4, 11, 0, 10, 1, 56, 0, 2}
-
-var script_decoder_map = map[string]func(*diemtypes.Script) (ScriptCall, error){
-	string(add_currency_to_account_code):                         decode_add_currency_to_account_script,
-	string(add_recovery_rotation_capability_code):                decode_add_recovery_rotation_capability_script,
-	string(add_validator_and_reconfigure_code):                   decode_add_validator_and_reconfigure_script,
-	string(burn_code):                                            decode_burn_script,
-	string(burn_txn_fees_code):                                   decode_burn_txn_fees_script,
-	string(cancel_burn_code):                                     decode_cancel_burn_script,
-	string(create_child_vasp_account_code):                       decode_create_child_vasp_account_script,
-	string(create_designated_dealer_code):                        decode_create_designated_dealer_script,
-	string(create_parent_vasp_account_code):                      decode_create_parent_vasp_account_script,
-	string(create_recovery_address_code):                         decode_create_recovery_address_script,
-	string(create_validator_account_code):                        decode_create_validator_account_script,
-	string(create_validator_operator_account_code):               decode_create_validator_operator_account_script,
-	string(freeze_account_code):                                  decode_freeze_account_script,
-	string(peer_to_peer_with_metadata_code):                      decode_peer_to_peer_with_metadata_script,
-	string(preburn_code):                                         decode_preburn_script,
-	string(publish_shared_ed25519_public_key_code):               decode_publish_shared_ed25519_public_key_script,
-	string(register_validator_config_code):                       decode_register_validator_config_script,
-	string(remove_validator_and_reconfigure_code):                decode_remove_validator_and_reconfigure_script,
-	string(rotate_authentication_key_code):                       decode_rotate_authentication_key_script,
-	string(rotate_authentication_key_with_nonce_code):            decode_rotate_authentication_key_with_nonce_script,
-	string(rotate_authentication_key_with_nonce_admin_code):      decode_rotate_authentication_key_with_nonce_admin_script,
-	string(rotate_authentication_key_with_recovery_address_code): decode_rotate_authentication_key_with_recovery_address_script,
-	string(rotate_dual_attestation_info_code):                    decode_rotate_dual_attestation_info_script,
-	string(rotate_shared_ed25519_public_key_code):                decode_rotate_shared_ed25519_public_key_script,
-	string(set_validator_config_and_reconfigure_code):            decode_set_validator_config_and_reconfigure_script,
-	string(set_validator_operator_code):                          decode_set_validator_operator_script,
-	string(set_validator_operator_with_nonce_admin_code):         decode_set_validator_operator_with_nonce_admin_script,
-	string(tiered_mint_code):                                     decode_tiered_mint_script,
-	string(unfreeze_account_code):                                decode_unfreeze_account_script,
-	string(update_diem_version_code):                             decode_update_diem_version_script,
-	string(update_dual_attestation_limit_code):                   decode_update_dual_attestation_limit_script,
-	string(update_exchange_rate_code):                            decode_update_exchange_rate_script,
-	string(update_minting_ability_code):                          decode_update_minting_ability_script,
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
 }
+
+func decode_unstake_vote_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 type arguments")
+		}
+		if len(script.Value.Args) < 2 {
+			return nil, fmt.Errorf("Was expecting 2 regular arguments")
+		}
+		var call ScriptFunctionCall__UnstakeVote
+		call.Token = script.Value.TyArgs[0]
+		call.Action = script.Value.TyArgs[1]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ProposerAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[1]); err == nil {
+			call.ProposalId = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_update_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__Update
+		call.OracleT = script.Value.TyArgs[0]
+		if val, err := decode_st_uint128_argument(script.Value.Args[0]); err == nil {
+			call.Value = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_update_module_upgrade_strategy_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__UpdateModuleUpgradeStrategy
+		if val, err := decode_st_uint8_argument(script.Value.Args[0]); err == nil {
+			call.Strategy = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_upgrade_from_v2_to_v3_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 regular arguments")
+		}
+		var call ScriptFunctionCall__UpgradeFromV2ToV3
+		if val, err := decode_st_uint128_argument(script.Value.Args[0]); err == nil {
+			call.TotalStcAmount = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_upgrade_from_v5_to_v6_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__UpgradeFromV5ToV6
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_upgrade_from_v6_to_v7_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__UpgradeFromV6ToV7
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_upgrade_from_v7_to_v8_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__UpgradeFromV7ToV8
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_withdraw_and_split_lt_withdraw_cap_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 3 {
+			return nil, fmt.Errorf("Was expecting 3 regular arguments")
+		}
+		var call ScriptFunctionCall__WithdrawAndSplitLtWithdrawCap
+		call.TokenT = script.Value.TyArgs[0]
+		if val, err := decode_starcoin_types_ccountAddress_argument(script.Value.Args[0]); err == nil {
+			call.ForAddress = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint128_argument(script.Value.Args[1]); err == nil {
+			call.Amount = val
+		} else {
+			return nil, err
+		}
+
+		if val, err := decode_st_uint64_argument(script.Value.Args[2]); err == nil {
+			call.LockPeriod = val
+		} else {
+			return nil, err
+		}
+
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+func decode_withdraw_token_with_linear_withdraw_capability_script_function(script diemtypes.TransactionPayload) (ScriptFunctionCall, error) {
+	switch script := interface{}(script).(type) {
+	case *diemtypes.TransactionPayload__ScriptFunction:
+		if len(script.Value.TyArgs) < 1 {
+			return nil, fmt.Errorf("Was expecting 1 type arguments")
+		}
+		if len(script.Value.Args) < 0 {
+			return nil, fmt.Errorf("Was expecting 0 regular arguments")
+		}
+		var call ScriptFunctionCall__WithdrawTokenWithLinearWithdrawCapability
+		call.TokenT = script.Value.TyArgs[0]
+		return &call, nil
+	default:
+		return nil, fmt.Errorf("Unexpected TransactionPayload encountered when decoding a script function")
+	}
+}
+
+var script_decoder_map = map[string]func(*diemtypes.Script) (ScriptCall, error){}
 
 var script_function_decoder_map = map[string]func(diemtypes.TransactionPayload) (ScriptFunctionCall, error){
-	"AccountAdministrationScriptsadd_currency_to_account":                         decode_add_currency_to_account_script_function,
-	"AccountAdministrationScriptsadd_recovery_rotation_capability":                decode_add_recovery_rotation_capability_script_function,
-	"ValidatorAdministrationScriptsadd_validator_and_reconfigure":                 decode_add_validator_and_reconfigure_script_function,
-	"TreasuryComplianceScriptsadd_vasp_domain":                                    decode_add_vasp_domain_script_function,
-	"TreasuryComplianceScriptsburn_txn_fees":                                      decode_burn_txn_fees_script_function,
-	"TreasuryComplianceScriptsburn_with_amount":                                   decode_burn_with_amount_script_function,
-	"TreasuryComplianceScriptscancel_burn_with_amount":                            decode_cancel_burn_with_amount_script_function,
-	"AccountCreationScriptscreate_child_vasp_account":                             decode_create_child_vasp_account_script_function,
-	"AccountCreationScriptscreate_designated_dealer":                              decode_create_designated_dealer_script_function,
-	"AccountCreationScriptscreate_parent_vasp_account":                            decode_create_parent_vasp_account_script_function,
-	"AccountAdministrationScriptscreate_recovery_address":                         decode_create_recovery_address_script_function,
-	"AccountCreationScriptscreate_validator_account":                              decode_create_validator_account_script_function,
-	"AccountCreationScriptscreate_validator_operator_account":                     decode_create_validator_operator_account_script_function,
-	"AccountAdministrationScriptscreate_vasp_domains":                             decode_create_vasp_domains_script_function,
-	"TreasuryComplianceScriptsfreeze_account":                                     decode_freeze_account_script_function,
-	"SystemAdministrationScriptsinitialize_diem_consensus_config":                 decode_initialize_diem_consensus_config_script_function,
-	"PaymentScriptspeer_to_peer_by_signers":                                       decode_peer_to_peer_by_signers_script_function,
-	"PaymentScriptspeer_to_peer_with_metadata":                                    decode_peer_to_peer_with_metadata_script_function,
-	"TreasuryComplianceScriptspreburn":                                            decode_preburn_script_function,
-	"AccountAdministrationScriptspublish_shared_ed25519_public_key":               decode_publish_shared_ed25519_public_key_script_function,
-	"ValidatorAdministrationScriptsregister_validator_config":                     decode_register_validator_config_script_function,
-	"ValidatorAdministrationScriptsremove_validator_and_reconfigure":              decode_remove_validator_and_reconfigure_script_function,
-	"TreasuryComplianceScriptsremove_vasp_domain":                                 decode_remove_vasp_domain_script_function,
-	"AccountAdministrationScriptsrotate_authentication_key":                       decode_rotate_authentication_key_script_function,
-	"AccountAdministrationScriptsrotate_authentication_key_with_nonce":            decode_rotate_authentication_key_with_nonce_script_function,
-	"AccountAdministrationScriptsrotate_authentication_key_with_nonce_admin":      decode_rotate_authentication_key_with_nonce_admin_script_function,
-	"AccountAdministrationScriptsrotate_authentication_key_with_recovery_address": decode_rotate_authentication_key_with_recovery_address_script_function,
-	"AccountAdministrationScriptsrotate_dual_attestation_info":                    decode_rotate_dual_attestation_info_script_function,
-	"AccountAdministrationScriptsrotate_shared_ed25519_public_key":                decode_rotate_shared_ed25519_public_key_script_function,
-	"SystemAdministrationScriptsset_gas_constants":                                decode_set_gas_constants_script_function,
-	"ValidatorAdministrationScriptsset_validator_config_and_reconfigure":          decode_set_validator_config_and_reconfigure_script_function,
-	"ValidatorAdministrationScriptsset_validator_operator":                        decode_set_validator_operator_script_function,
-	"ValidatorAdministrationScriptsset_validator_operator_with_nonce_admin":       decode_set_validator_operator_with_nonce_admin_script_function,
-	"TreasuryComplianceScriptstiered_mint":                                        decode_tiered_mint_script_function,
-	"TreasuryComplianceScriptsunfreeze_account":                                   decode_unfreeze_account_script_function,
-	"SystemAdministrationScriptsupdate_diem_consensus_config":                     decode_update_diem_consensus_config_script_function,
-	"SystemAdministrationScriptsupdate_diem_version":                              decode_update_diem_version_script_function,
-	"TreasuryComplianceScriptsupdate_dual_attestation_limit":                      decode_update_dual_attestation_limit_script_function,
-	"TreasuryComplianceScriptsupdate_exchange_rate":                               decode_update_exchange_rate_script_function,
-	"TreasuryComplianceScriptsupdate_minting_ability":                             decode_update_minting_ability_script_function,
-}
-
-func encode_bool_argument(arg bool) []byte {
-
-	s := bcs.NewSerializer()
-	if err := s.SerializeBool(arg); err == nil {
-		return s.GetBytes()
-	}
-
-	panic("Unable to serialize argument of type bool")
-}
-
-func encode_u64_argument(arg uint64) []byte {
-
-	s := bcs.NewSerializer()
-	if err := s.SerializeU64(arg); err == nil {
-		return s.GetBytes()
-	}
-
-	panic("Unable to serialize argument of type u64")
-}
-
-func encode_address_argument(arg diemtypes.AccountAddress) []byte {
-
-	if val, err := arg.BcsSerialize(); err == nil {
-		{
-			return val
-		}
-	}
-
-	panic("Unable to serialize argument of type address")
-}
-
-func encode_u8vector_argument(arg []byte) []byte {
-
-	s := bcs.NewSerializer()
-	if err := s.SerializeBytes(arg); err == nil {
-		return s.GetBytes()
-	}
-
-	panic("Unable to serialize argument of type u8vector")
+	"NFTGalleryScriptsaccept":                                       decode_accept_script_function,
+	"Accountaccept_token":                                           decode_accept_token_script_function,
+	"ModuleUpgradeScriptscancel_upgrade_plan":                       decode_cancel_upgrade_plan_script_function,
+	"DaoVoteScriptscast_vote":                                       decode_cast_vote_script_function,
+	"PackageTxnManagerconvert_TwoPhaseUpgrade_to_TwoPhaseUpgradeV2": decode_convert_TwoPhaseUpgrade_to_TwoPhaseUpgradeV2_script_function,
+	"Accountcreate_account_with_initial_amount":                     decode_create_account_with_initial_amount_script_function,
+	"Accountcreate_account_with_initial_amount_v2":                  decode_create_account_with_initial_amount_v2_script_function,
+	"IdentifierNFTScriptsdestroy_empty":                             decode_destroy_empty_script_function,
+	"Daodestroy_terminated_proposal":                                decode_destroy_terminated_proposal_script_function,
+	"AccountScriptsdisable_auto_accept_token":                       decode_disable_auto_accept_token_script_function,
+	"EmptyScriptsempty_script":                                      decode_empty_script_script_function,
+	"AccountScriptsenable_auto_accept_token":                        decode_enable_auto_accept_token_script_function,
+	"ModifyDaoConfigProposalexecute":                                decode_execute_script_function,
+	"ModuleUpgradeScriptsexecute_module_upgrade_plan_propose":       decode_execute_module_upgrade_plan_propose_script_function,
+	"OnChainConfigScriptsexecute_on_chain_config_proposal":          decode_execute_on_chain_config_proposal_script_function,
+	"OnChainConfigScriptsexecute_on_chain_config_proposal_v2":       decode_execute_on_chain_config_proposal_v2_script_function,
+	"TreasuryScriptsexecute_withdraw_proposal":                      decode_execute_withdraw_proposal_script_function,
+	"DaoVoteScriptsflip_vote":                                       decode_flip_vote_script_function,
+	"PriceOracleScriptsinit_data_source":                            decode_init_data_source_script_function,
+	"Genesisinitialize":                                             decode_initialize_script_function,
+	"Genesisinitialize_v2":                                          decode_initialize_v2_script_function,
+	"DummyTokenScriptsmint":                                         decode_mint_script_function,
+	"TransferScriptspeer_to_peer":                                   decode_peer_to_peer_script_function,
+	"TransferScriptspeer_to_peer_batch":                             decode_peer_to_peer_batch_script_function,
+	"TransferScriptspeer_to_peer_v2":                                decode_peer_to_peer_v2_script_function,
+	"TransferScriptspeer_to_peer_with_metadata":                     decode_peer_to_peer_with_metadata_script_function,
+	"TransferScriptspeer_to_peer_with_metadata_v2":                  decode_peer_to_peer_with_metadata_v2_script_function,
+	"ModifyDaoConfigProposalpropose":                                decode_propose_script_function,
+	"ModuleUpgradeScriptspropose_module_upgrade_v2":                 decode_propose_module_upgrade_v2_script_function,
+	"OnChainConfigScriptspropose_update_consensus_config":           decode_propose_update_consensus_config_script_function,
+	"OnChainConfigScriptspropose_update_move_language_version":      decode_propose_update_move_language_version_script_function,
+	"OnChainConfigScriptspropose_update_reward_config":              decode_propose_update_reward_config_script_function,
+	"OnChainConfigScriptspropose_update_txn_publish_option":         decode_propose_update_txn_publish_option_script_function,
+	"OnChainConfigScriptspropose_update_txn_timeout_config":         decode_propose_update_txn_timeout_config_script_function,
+	"OnChainConfigScriptspropose_update_vm_config":                  decode_propose_update_vm_config_script_function,
+	"TreasuryScriptspropose_withdraw":                               decode_propose_withdraw_script_function,
+	"Daoqueue_proposal_action":                                      decode_queue_proposal_action_script_function,
+	"PriceOracleScriptsregister_oracle":                             decode_register_oracle_script_function,
+	"DaoVoteScriptsrevoke_vote":                                     decode_revoke_vote_script_function,
+	"DaoVoteScriptsrevoke_vote_of_power":                            decode_revoke_vote_of_power_script_function,
+	"Accountrotate_authentication_key":                              decode_rotate_authentication_key_script_function,
+	"ModuleUpgradeScriptssubmit_module_upgrade_plan":                decode_submit_module_upgrade_plan_script_function,
+	"ModuleUpgradeScriptssubmit_upgrade_plan":                       decode_submit_upgrade_plan_script_function,
+	"StdlibUpgradeScriptstake_linear_withdraw_capability":           decode_take_linear_withdraw_capability_script_function,
+	"Offertake_offer":                                               decode_take_offer_script_function,
+	"NFTGalleryScriptstransfer":                                     decode_transfer_script_function,
+	"DaoVoteScriptsunstake_vote":                                    decode_unstake_vote_script_function,
+	"PriceOracleScriptsupdate":                                      decode_update_script_function,
+	"ModuleUpgradeScriptsupdate_module_upgrade_strategy":            decode_update_module_upgrade_strategy_script_function,
+	"StdlibUpgradeScriptsupgrade_from_v2_to_v3":                     decode_upgrade_from_v2_to_v3_script_function,
+	"StdlibUpgradeScriptsupgrade_from_v5_to_v6":                     decode_upgrade_from_v5_to_v6_script_function,
+	"StdlibUpgradeScriptsupgrade_from_v6_to_v7":                     decode_upgrade_from_v6_to_v7_script_function,
+	"StdlibUpgradeScriptsupgrade_from_v7_to_v8":                     decode_upgrade_from_v7_to_v8_script_function,
+	"TreasuryScriptswithdraw_and_split_lt_withdraw_cap":             decode_withdraw_and_split_lt_withdraw_cap_script_function,
+	"TreasuryScriptswithdraw_token_with_linear_withdraw_capability": decode_withdraw_token_with_linear_withdraw_capability_script_function,
 }
 
 func decode_bool_argument(arg diemtypes.TransactionArgument) (value bool, err error) {
@@ -9222,7 +3498,16 @@ func decode_bool_argument(arg diemtypes.TransactionArgument) (value bool, err er
 	return
 }
 
-func decode_u64_argument(arg diemtypes.TransactionArgument) (value uint64, err error) {
+func decode_st_uint8_argument(arg diemtypes.TransactionArgument) (value uint8, err error) {
+	if arg, ok := arg.(*diemtypes.TransactionArgument__U8); ok {
+		value = uint8(*arg)
+	} else {
+		err = fmt.Errorf("Was expecting a U8 argument")
+	}
+	return
+}
+
+func decode_st_uint64_argument(arg diemtypes.TransactionArgument) (value uint64, err error) {
 	if arg, ok := arg.(*diemtypes.TransactionArgument__U64); ok {
 		value = uint64(*arg)
 	} else {
@@ -9231,7 +3516,16 @@ func decode_u64_argument(arg diemtypes.TransactionArgument) (value uint64, err e
 	return
 }
 
-func decode_address_argument(arg diemtypes.TransactionArgument) (value diemtypes.AccountAddress, err error) {
+func decode_st_uint128_argument(arg diemtypes.TransactionArgument) (value serde.Uint128, err error) {
+	if arg, ok := arg.(*diemtypes.TransactionArgument__U128); ok {
+		value = serde.Uint128(*arg)
+	} else {
+		err = fmt.Errorf("Was expecting a U128 argument")
+	}
+	return
+}
+
+func decode_starcoin_types_ccountAddress_argument(arg diemtypes.TransactionArgument) (value diemtypes.AccountAddress, err error) {
 	if arg, ok := arg.(*diemtypes.TransactionArgument__Address); ok {
 		value = arg.Value
 	} else {
@@ -9240,7 +3534,7 @@ func decode_address_argument(arg diemtypes.TransactionArgument) (value diemtypes
 	return
 }
 
-func decode_u8vector_argument(arg diemtypes.TransactionArgument) (value []byte, err error) {
+func decode_bytes_argument(arg diemtypes.TransactionArgument) (value []byte, err error) {
 	if arg, ok := arg.(*diemtypes.TransactionArgument__U8Vector); ok {
 		value = []byte(*arg)
 	} else {

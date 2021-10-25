@@ -8,7 +8,7 @@ import (
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"github.com/starcoinorg/starcoin-go/types"
 
-	owcrypt "github.com/blocktree/go-owcrypt"
+	"github.com/blocktree/go-owcrypt"
 )
 
 func TestHttpCall(t *testing.T) {
@@ -210,7 +210,7 @@ func TestDeployContract(t *testing.T) {
 		Module:   moduleId,
 		Function: "init",
 		TyArgs:   []types.TypeTag{},
-		Args:     [][]byte{},
+		Args:     []types.TransactionArgument{},
 	}
 	client.DeployContract(ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"), privateKey, scriptFunction, code)
 }
