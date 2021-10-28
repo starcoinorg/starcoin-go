@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -15,70 +16,70 @@ func TestHttpCall(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	var result interface{}
 
-	result, err := client.GetNodeInfo()
+	result, err := client.GetNodeInfo(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetTransactionByHash("0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
+	result, err = client.GetTransactionByHash(context.Background(),"0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetTransactionInfoByHash("0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
+	result, err = client.GetTransactionInfoByHash(context.Background(),"0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetTransactionEventByHash("0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
+	result, err = client.GetTransactionEventByHash(context.Background(),"0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetBlockByHash("0x9e635ae64903409378f5146ff89bfea52a61326ffcbf4191fa63cce642cfc2ea")
+	result, err = client.GetBlockByHash(context.Background(),"0x9e635ae64903409378f5146ff89bfea52a61326ffcbf4191fa63cce642cfc2ea")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetBlockByNumber(2)
+	result, err = client.GetBlockByNumber(context.Background(),2)
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetBlocksFromNumber(2, 10)
+	result, err = client.GetBlocksFromNumber(context.Background(),2, 10)
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetResource("0xa76b896725a088beafb470fe93251c4d")
+	result, err = client.GetResource(context.Background(),"0xa76b896725a088beafb470fe93251c4d")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetState("0xa76b896725a088beafb470fe93251c4d")
+	result, err = client.GetState(context.Background(),"0xa76b896725a088beafb470fe93251c4d")
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(result)
 
-	result, err = client.GetGasUnitPrice()
+	result, err = client.GetGasUnitPrice(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -90,7 +91,7 @@ func TestHttpCall(t *testing.T) {
 		[]string{"0x00000000000000000000000000000001::STC::STC"},
 		[]string{},
 	}
-	result, err = client.CallContract(call)
+	result, err = client.CallContract(context.Background(),call)
 	if err != nil {
 		t.Error(err)
 	}
@@ -103,7 +104,7 @@ func TestBalance(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	var result *ListResource
 
-	result, err := client.GetResource("0x79f75dc7cb6812760e1afba01dc9380e")
+	result, err := client.GetResource(context.Background(),"0x79f75dc7cb6812760e1afba01dc9380e")
 	if err != nil {
 		t.Error(err)
 	}
@@ -115,7 +116,7 @@ func TestWsCall(t *testing.T) {
 	client := NewStarcoinClient("ws://localhost:9870")
 
 	//c, err := client.NewTxnSendRecvEventNotifications("0xb75994d55eae88219dc57e7e62a11bc0")
-	c, err := client.NewPendingTransactionsNotifications()
+	c, err := client.NewPendingTransactionsNotifications(context.Background())
 
 	if err != nil {
 		t.Error(err)
@@ -125,7 +126,7 @@ func TestWsCall(t *testing.T) {
 
 	fmt.Println(data)
 
-	c1, err := client.NewTxnSendRecvEventNotifications("0xb75994d55eae88219dc57e7e62a11bc0")
+	c1, err := client.NewTxnSendRecvEventNotifications(context.Background(),"0xb75994d55eae88219dc57e7e62a11bc0")
 
 	if err != nil {
 		t.Error(err)
@@ -144,7 +145,7 @@ func TestSubmitTransaction(t *testing.T) {
 	privateKey := types.Ed25519PrivateKey(privateKeyBytes)
 	addressArray := ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0")
 
-	result, err := client.TransferStc(addressArray, privateKey, ToAccountAddress("ab4039861ca47ec349b64ddb862293bf"), serde.Uint128{
+	result, err := client.TransferStc(context.Background(),addressArray, privateKey, ToAccountAddress("ab4039861ca47ec349b64ddb862293bf"), serde.Uint128{
 		High: 0,
 		Low:  100000,
 	})
@@ -158,7 +159,7 @@ func TestNodeInfo(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	var result interface{}
 
-	result, err := client.GetNodeInfo()
+	result, err := client.GetNodeInfo(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -212,12 +213,12 @@ func TestDeployContract(t *testing.T) {
 		TyArgs:   []types.TypeTag{},
 		Args:     []types.TransactionArgument{},
 	}
-	client.DeployContract(ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"), privateKey, scriptFunction, code)
+	client.DeployContract(context.Background(),ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0"), privateKey, scriptFunction, code)
 }
 
 func TestGetEvents(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
-	events, err := client.GetEvents(&EventFilter{
+	events, err := client.GetEvents(context.Background(),&EventFilter{
 		FromBlock: 0,
 		ToBlock:   32,
 	})
