@@ -37,7 +37,7 @@ func (this *StarcoinClient) Call(context context.Context,serviceMethod string, r
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
 
-	err = client.Call(serviceMethod, reply, args)
+	err = client.Call(context,serviceMethod, reply, args)
 
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("call method %s err: ", serviceMethod), err)
