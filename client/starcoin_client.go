@@ -33,14 +33,12 @@ func NewStarcoinClient(url string) StarcoinClient {
 func (this *StarcoinClient) Call(context context.Context,serviceMethod string, reply interface{}, args interface{}) error {
 	client, err := jsonrpc.NewClient(this.url)
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("call method %s err: ", serviceMethod), err)
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
 
 	err = client.Call(context,serviceMethod, reply, args)
 
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("call method %s err: ", serviceMethod), err)
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
 
@@ -52,7 +50,6 @@ func (this *StarcoinClient) GetNodeInfo(context context.Context,) (*NodeInfo, er
 	err := this.Call(context,"node.info", result, nil)
 
 	if err != nil {
-		log.Fatalln("call node.info err: ", err)
 		return nil, errors.Wrap(err, "call method node.info error ")
 	}
 
@@ -64,7 +61,6 @@ func (this *StarcoinClient) GetEvents(context context.Context,eventFilter *Event
 	params := []interface{}{eventFilter}
 	err := this.Call(context,"chain.get_events", &result, params)
 	if err != nil {
-		log.Fatalln("call chain.get_events err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_events error ")
 	}
 	return result, nil
@@ -76,7 +72,6 @@ func (this *StarcoinClient) GetTransactionByHash(context context.Context,transac
 	err := this.Call(context,"chain.get_transaction", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_transaction err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_transaction error ")
 	}
 
@@ -89,7 +84,6 @@ func (this *StarcoinClient) GetPendingTransactionByHash(context context.Context,
 	err := this.Call(context,"txpool.pending_txn", result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.pending_txn err: ", err)
 		return nil, errors.Wrap(err, "call method txpool.pending_txn error ")
 	}
 
@@ -102,7 +96,6 @@ func (this *StarcoinClient) GetTransactionInfoByHash(context context.Context,tra
 	err := this.Call(context,"chain.get_transaction_info", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_transaction_info err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_transaction_info error ")
 	}
 
@@ -115,7 +108,6 @@ func (this *StarcoinClient) GetTransactionEventByHash(context context.Context,tr
 	err := this.Call(context,"chain.get_events_by_txn_hash", &result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_events_by_txn_hash err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_events_by_txn_hash error ")
 	}
 
@@ -128,7 +120,6 @@ func (this *StarcoinClient) GetBlockByHash(context context.Context,blockHash str
 	err := this.Call(context,"chain.get_block_by_hash", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_block_by_hash err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_block_by_hash ")
 	}
 
@@ -141,7 +132,6 @@ func (this *StarcoinClient) GetBlockByNumber(context context.Context,number int)
 	err := this.Call(context,"chain.get_block_by_number", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_block_by_number err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_block_by_number ")
 	}
 
@@ -154,7 +144,6 @@ func (this *StarcoinClient) GetBlocksFromNumber(context context.Context,number, 
 	err := this.Call(context,"chain.get_blocks_by_number", &result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_blocks_by_number err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_blocks_by_number ")
 	}
 
@@ -169,7 +158,6 @@ func (this *StarcoinClient) GetResource(context context.Context,address string) 
 	err := this.Call(context,"state.list_resource", result, params)
 
 	if err != nil {
-		log.Fatalln("call state.list_resource err: ", err)
 		return nil, errors.Wrap(err, "call method state.list_resource ")
 	}
 
@@ -190,13 +178,11 @@ func (this *StarcoinClient) GetState(context context.Context,address string) (*t
 	err := this.Call(context,"state.get", &result, params)
 
 	if err != nil {
-		log.Fatalln("call state.get err: ", err)
 		return nil, errors.Wrap(err, "call method state.get ")
 	}
 
 	accountResource, err := types.BcsDeserializeAccountResource(result)
 	if err != nil {
-		log.Fatalln("Bcs Deserialize AccountResource failed", err)
 		return nil, errors.Wrap(err, "Bcs Deserialize AccountResource failed")
 	}
 
@@ -206,7 +192,6 @@ func (this *StarcoinClient) GetState(context context.Context,address string) (*t
 func (this *StarcoinClient) Subscribe(context context.Context,args ...interface{}) (chan []byte, error) {
 	client, err := jsonrpc.NewClient(this.url)
 	if err != nil {
-		log.Fatalln(err)
 		return nil, errors.Wrap(err, "subscrible failed ")
 	}
 
@@ -221,7 +206,6 @@ func (this *StarcoinClient) Subscribe(context context.Context,args ...interface{
 	}, args)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		cancel()
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
@@ -239,7 +223,6 @@ func (this *StarcoinClient) NewTxnSendRecvEventNotifications(context context.Con
 	dataChan, err := this.Subscribe(context,events, filter)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
 
@@ -252,7 +235,7 @@ func (this *StarcoinClient) NewTxnSendRecvEventNotifications(context context.Con
 			eventData := Event{}
 			err = json.Unmarshal(data, &eventData)
 			if err != nil {
-				log.Fatalln("call method subscribe err: ", err)
+				log.Println("call method subscribe err: ", err)
 			}
 			eventChan <- eventData
 		}
@@ -269,7 +252,6 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications(context context.
 	dataChan, err := this.Subscribe(context,pendingTxn)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
 
@@ -281,7 +263,7 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications(context context.
 			pendingTxn := make([]string, 0, 20)
 			err = json.Unmarshal(data, &pendingTxn)
 			if err != nil {
-				log.Fatalln("call method subscribe err: ", err)
+				log.Println("call method subscribe err: ", err)
 			}
 			txnChan <- pendingTxn
 		}
@@ -306,7 +288,6 @@ func (this *StarcoinClient) SubmitTransaction(context context.Context,privateKey
 	err = this.Call(context,"txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
@@ -325,7 +306,6 @@ func (this *StarcoinClient) SubmitSignedTransaction(context context.Context,
 	err = this.Call(context,"txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
@@ -339,7 +319,6 @@ func (this *StarcoinClient) SubmitSignedTransactionBytes(context context.Context
 	err := this.Call(context,"txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
@@ -434,6 +413,28 @@ func (this *StarcoinClient) GetGasUnitPrice(context context.Context,) (int, erro
 func (this *StarcoinClient) CallContract(context context.Context,call ContractCall) (interface{}, error) {
 	var result []interface{}
 	err := this.Call(context,"contract.call_v2", &result, []interface{}{call})
+
+	if err != nil {
+		return 1, errors.Wrap(err, "call method contract.call_v2 ")
+	}
+
+	return result, nil
+}
+
+func (this *StarcoinClient) DryRun(context context.Context,txn types.RawUserTransaction,publicKey types.Ed25519PublicKey) (interface{}, error) {
+	var result []interface{}
+
+	data,err := txn.BcsSerialize()
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	pk , err := publicKey.BcsSerialize()
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	err = this.Call(context,"contract.dry_run_raw", &result, []interface{}{ BytesToHexString(data),  BytesToHexString(pk) })
 
 	if err != nil {
 		return 1, errors.Wrap(err, "call method contract.call_v2 ")
