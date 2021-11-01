@@ -3,7 +3,9 @@ package client
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/starcoinorg/starcoin-go/types"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -102,6 +104,108 @@ type Block struct {
 	BlockHeader BlockHeader   `json:"header"`
 	BlockBody   BlockBody     `json:"body"`
 	Uncles      []BlockHeader `json:"uncles"`
+}
+
+func (block Block) GetHeader() (*types.BlockHeader, error) {
+	parentHash, err := HexStringToBytes(block.BlockHeader.ParentHash)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	ts, err := strconv.Atoi(block.BlockHeader.Timestamp)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	number, err := strconv.Atoi(block.BlockHeader.Height)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	author, err := ToAccountAddress(block.BlockHeader.Author)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var authKey types.AuthenticationKey
+	authKey, err = HexStringToBytes(block.BlockHeader.AuthorAuthKey)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	txnAccumulatorRoot, err := HexStringToBytes(block.BlockHeader.TxnAccumulatorRoot)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	blockAccumulatorRoot, err := HexStringToBytes(block.BlockHeader.BlockAccumulatorRoot)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	stateRoot, err := HexStringToBytes(block.BlockHeader.StateRoot)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	gasUsed, err := strconv.Atoi(block.BlockHeader.GasUsed)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	diff, err := HexStringToBytes(block.BlockHeader.DifficultyHexStr)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	var difficulty [32]uint8
+	copy(difficulty[:], diff[:32])
+
+	bodyHash, err := HexStringToBytes(block.BlockHeader.BodyHash)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	extra, err := HexStringToBytes(block.BlockHeader.Extra)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	var blockExtra [4]uint8
+	copy(blockExtra[:], extra[:4])
+
+	result := types.BlockHeader{
+		ParentHash:           parentHash,
+		Timestamp:            uint64(ts),
+		Number:               uint64(number),
+		Author:               *author,
+		AuthorAuthKey:        &authKey,
+		TxnAccumulatorRoot:   txnAccumulatorRoot,
+		BlockAccumulatorRoot: blockAccumulatorRoot,
+		StateRoot:            stateRoot,
+		GasUsed:              uint64(gasUsed),
+		Difficulty:           difficulty,
+		BodyHash:             bodyHash,
+		ChainId:              types.ChainId{Id: uint8(block.BlockHeader.ChainId)},
+		Nonce:                uint32(block.BlockHeader.Nonce),
+		Extra:                blockExtra,
+	}
+	return &result, nil
+}
+
+func (block Block) GetHeaderHash() (*types.HashValue, error) {
+	header, err := block.GetHeader()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	headerBytes, err := header.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var result types.HashValue
+	result = Hash(PrefixHash("BlockHeader"), headerBytes)
+
+	return &result, nil
 }
 
 type BlockBody struct {
@@ -207,6 +311,15 @@ type NodeInfo struct {
 		Type string `json:"type"`
 	} `json:"consensus"`
 	NowSeconds int `json:"now_seconds"`
+}
+
+func (info NodeInfo) GetBlockNumber() (uint64, error) {
+	number, err := strconv.Atoi(info.PeerInfo.ChainInfo.Header.Height)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	return uint64(number), nil
 }
 
 type ContractCall struct {

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -29,183 +30,168 @@ func NewStarcoinClient(url string) StarcoinClient {
 	}
 }
 
-func (this *StarcoinClient) Call(serviceMethod string, reply interface{}, args interface{}) error {
+func (this *StarcoinClient) Call(context context.Context, serviceMethod string, reply interface{}, args interface{}) error {
 	client, err := jsonrpc.NewClient(this.url)
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("call method %s err: ", serviceMethod), err)
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
 
-	err = client.Call(serviceMethod, reply, args)
+	err = client.Call(context, serviceMethod, reply, args)
 
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("call method %s err: ", serviceMethod), err)
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
 
 	return nil
 }
 
-func (this *StarcoinClient) GetNodeInfo() (*NodeInfo, error) {
+func (this *StarcoinClient) GetNodeInfo(context context.Context) (*NodeInfo, error) {
 	result := &NodeInfo{}
-	err := this.Call("node.info", result, nil)
+	err := this.Call(context, "node.info", result, nil)
 
 	if err != nil {
-		log.Fatalln("call node.info err: ", err)
 		return nil, errors.Wrap(err, "call method node.info error ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetEvents(eventFilter *EventFilter) ([]Event, error) {
+func (this *StarcoinClient) GetEvents(context context.Context, eventFilter *EventFilter) ([]Event, error) {
 	var result []Event
 	params := []interface{}{eventFilter}
-	err := this.Call("chain.get_events", &result, params)
+	err := this.Call(context, "chain.get_events", &result, params)
 	if err != nil {
-		log.Fatalln("call chain.get_events err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_events error ")
 	}
 	return result, nil
 }
 
-func (this *StarcoinClient) GetTransactionByHash(transactionHash string) (*Transaction, error) {
+func (this *StarcoinClient) GetTransactionByHash(context context.Context, transactionHash string) (*Transaction, error) {
 	result := &Transaction{}
 	params := []string{transactionHash}
-	err := this.Call("chain.get_transaction", result, params)
+	err := this.Call(context, "chain.get_transaction", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_transaction err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_transaction error ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetPendingTransactionByHash(transactionHash string) (*PendingTransaction, error) {
+func (this *StarcoinClient) GetPendingTransactionByHash(context context.Context, transactionHash string) (*PendingTransaction, error) {
 	result := &PendingTransaction{}
 	params := []string{transactionHash}
-	err := this.Call("txpool.pending_txn", result, params)
+	err := this.Call(context, "txpool.pending_txn", result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.pending_txn err: ", err)
 		return nil, errors.Wrap(err, "call method txpool.pending_txn error ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetTransactionInfoByHash(transactionHash string) (*TransactionInfo, error) {
+func (this *StarcoinClient) GetTransactionInfoByHash(context context.Context, transactionHash string) (*TransactionInfo, error) {
 	result := &TransactionInfo{}
 	params := []string{transactionHash}
-	err := this.Call("chain.get_transaction_info", result, params)
+	err := this.Call(context, "chain.get_transaction_info", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_transaction_info err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_transaction_info error ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetTransactionEventByHash(transactionHash string) ([]Event, error) {
+func (this *StarcoinClient) GetTransactionEventByHash(context context.Context, transactionHash string) ([]Event, error) {
 	var result []Event
 	params := []string{transactionHash}
-	err := this.Call("chain.get_events_by_txn_hash", &result, params)
+	err := this.Call(context, "chain.get_events_by_txn_hash", &result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_events_by_txn_hash err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_events_by_txn_hash error ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetBlockByHash(blockHash string) (*Block, error) {
+func (this *StarcoinClient) GetBlockByHash(context context.Context, blockHash string) (*Block, error) {
 	result := &Block{}
 	params := []string{blockHash}
-	err := this.Call("chain.get_block_by_hash", result, params)
+	err := this.Call(context, "chain.get_block_by_hash", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_block_by_hash err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_block_by_hash ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetBlockByNumber(number int) (*Block, error) {
+func (this *StarcoinClient) GetBlockByNumber(context context.Context, number int) (*Block, error) {
 	result := &Block{}
 	params := []int{number}
-	err := this.Call("chain.get_block_by_number", result, params)
+	err := this.Call(context, "chain.get_block_by_number", result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_block_by_number err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_block_by_number ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetBlocksFromNumber(number, count int) ([]Block, error) {
+func (this *StarcoinClient) GetBlocksFromNumber(context context.Context, number, count int) ([]Block, error) {
 	var result []Block
 	params := []int{number, count}
-	err := this.Call("chain.get_blocks_by_number", &result, params)
+	err := this.Call(context, "chain.get_blocks_by_number", &result, params)
 
 	if err != nil {
-		log.Fatalln("call chain.get_blocks_by_number err: ", err)
 		return nil, errors.Wrap(err, "call method chain.get_blocks_by_number ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetResource(address string) (*ListResource, error) {
+func (this *StarcoinClient) GetResource(context context.Context, address string) (*ListResource, error) {
 	result := &ListResource{
 		Resources: make(map[string]Resource),
 	}
 	params := []string{address}
-	err := this.Call("state.list_resource", result, params)
+	err := this.Call(context, "state.list_resource", result, params)
 
 	if err != nil {
-		log.Fatalln("call state.list_resource err: ", err)
 		return nil, errors.Wrap(err, "call method state.list_resource ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) GetAccountSequenceNumber(address string) (uint64, error) {
-	state, err := this.GetState(address)
+func (this *StarcoinClient) GetAccountSequenceNumber(context context.Context, address string) (uint64, error) {
+	state, err := this.GetState(context, address)
 	if err != nil {
 		return 0, err
 	}
 	return state.SequenceNumber, nil
 }
 
-func (this *StarcoinClient) GetState(address string) (*types.AccountResource, error) {
+func (this *StarcoinClient) GetState(context context.Context, address string) (*types.AccountResource, error) {
 	var result []byte
 	params := []string{address + "/1/0x00000000000000000000000000000001::Account::Account"}
-	err := this.Call("state.get", &result, params)
+	err := this.Call(context, "state.get", &result, params)
 
 	if err != nil {
-		log.Fatalln("call state.get err: ", err)
 		return nil, errors.Wrap(err, "call method state.get ")
 	}
 
 	accountResource, err := types.BcsDeserializeAccountResource(result)
 	if err != nil {
-		log.Fatalln("Bcs Deserialize AccountResource failed", err)
 		return nil, errors.Wrap(err, "Bcs Deserialize AccountResource failed")
 	}
 
 	return &accountResource, nil
 }
 
-func (this *StarcoinClient) Subscribe(args ...interface{}) (chan []byte, error) {
+func (this *StarcoinClient) Subscribe(context context.Context, args ...interface{}) (chan []byte, error) {
 	client, err := jsonrpc.NewClient(this.url)
 	if err != nil {
-		log.Fatalln(err)
 		return nil, errors.Wrap(err, "subscrible failed ")
 	}
 
@@ -215,12 +201,11 @@ func (this *StarcoinClient) Subscribe(args ...interface{}) (chan []byte, error) 
 
 	c := make(chan []byte)
 
-	cancel, err := client.Subscribe(func(b []byte) {
+	cancel, err := client.Subscribe(context, func(b []byte) {
 		c <- b
 	}, args)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		cancel()
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
@@ -228,17 +213,16 @@ func (this *StarcoinClient) Subscribe(args ...interface{}) (chan []byte, error) 
 	return c, nil
 }
 
-func (this *StarcoinClient) NewTxnSendRecvEventNotifications(addr string) (chan Event, error) {
+func (this *StarcoinClient) NewTxnSendRecvEventNotifications(context context.Context, addr string) (chan Event, error) {
 	events := Kind{
 		Type:     1,
 		TypeName: "events",
 	}
 
 	filter := NewSendRecvEventFilters(addr, 0)
-	dataChan, err := this.Subscribe(events, filter)
+	dataChan, err := this.Subscribe(context, events, filter)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
 
@@ -251,7 +235,7 @@ func (this *StarcoinClient) NewTxnSendRecvEventNotifications(addr string) (chan 
 			eventData := Event{}
 			err = json.Unmarshal(data, &eventData)
 			if err != nil {
-				log.Fatalln("call method subscribe err: ", err)
+				log.Println("call method subscribe err: ", err)
 			}
 			eventChan <- eventData
 		}
@@ -259,16 +243,15 @@ func (this *StarcoinClient) NewTxnSendRecvEventNotifications(addr string) (chan 
 	return eventChan, nil
 }
 
-func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string, error) {
+func (this *StarcoinClient) NewPendingTransactionsNotifications(context context.Context) (chan []string, error) {
 	pendingTxn := Kind{
 		Type:     2,
 		TypeName: "newPendingTransactions",
 	}
 
-	dataChan, err := this.Subscribe(pendingTxn)
+	dataChan, err := this.Subscribe(context, pendingTxn)
 
 	if err != nil {
-		log.Fatalln("call method subscribe err: ", err)
 		return nil, errors.Wrap(err, "call method subscribe err: ")
 	}
 
@@ -280,7 +263,7 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string
 			pendingTxn := make([]string, 0, 20)
 			err = json.Unmarshal(data, &pendingTxn)
 			if err != nil {
-				log.Fatalln("call method subscribe err: ", err)
+				log.Println("call method subscribe err: ", err)
 			}
 			txnChan <- pendingTxn
 		}
@@ -288,7 +271,7 @@ func (this *StarcoinClient) NewPendingTransactionsNotifications() (chan []string
 	return txnChan, nil
 }
 
-func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey,
+func (this *StarcoinClient) SubmitTransaction(context context.Context, privateKey types.Ed25519PrivateKey,
 	rawUserTransaction *types.RawUserTransaction) (string, error) {
 	signedUserTransaction, err := signTxn(privateKey, rawUserTransaction)
 	if err != nil {
@@ -302,17 +285,16 @@ func (this *StarcoinClient) SubmitTransaction(privateKey types.Ed25519PrivateKey
 
 	var result string
 	params := []string{hex.EncodeToString(signedUserTransactionBytes)}
-	err = this.Call("txpool.submit_hex_transaction", &result, params)
+	err = this.Call(context, "txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) SubmitSignedTransaction(
+func (this *StarcoinClient) SubmitSignedTransaction(context context.Context,
 	userTxn *types.SignedUserTransaction) (string, error) {
 	signedUserTransactionBytes, err := userTxn.BcsSerialize()
 	if err != nil {
@@ -321,31 +303,30 @@ func (this *StarcoinClient) SubmitSignedTransaction(
 
 	var result string
 	params := []string{hex.EncodeToString(signedUserTransactionBytes)}
-	err = this.Call("txpool.submit_hex_transaction", &result, params)
+	err = this.Call(context, "txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) SubmitSignedTransactionBytes(
+func (this *StarcoinClient) SubmitSignedTransactionBytes(context context.Context,
 	userTxn []byte) (string, error) {
 	var result string
 	params := []string{hex.EncodeToString(userTxn)}
-	err := this.Call("txpool.submit_hex_transaction", &result, params)
+	err := this.Call(context, "txpool.submit_hex_transaction", &result, params)
 
 	if err != nil {
-		log.Fatalln("call txpool.submit_hex_transaction err: ", err)
 		return emptyString, errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
 	return result, nil
 }
 
-func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (string, error) {
+func (this *StarcoinClient) TransferStc(context context.Context, sender types.AccountAddress,
+	privateKey types.Ed25519PrivateKey, receiver types.AccountAddress, amount serde.Uint128) (string, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
 		return emptyString, errors.Wrap(err, "decode core address failed")
@@ -361,26 +342,27 @@ func (this *StarcoinClient) TransferStc(sender types.AccountAddress, privateKey 
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
 
-	price, err := this.GetGasUnitPrice()
+	price, err := this.GetGasUnitPrice(context)
 	if err != nil {
 		return "", errors.Wrap(err, "get gas unit price failed ")
 	}
 
-	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
+	state, err := this.GetState(context, "0x"+hex.EncodeToString(sender[:]))
 
 	if err != nil {
 		return "", errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
-	rawUserTransaction, err := this.BuildRawUserTransaction(sender, payload, price, DEFAULT_MAX_GAS_AMOUNT, state.SequenceNumber)
+	rawUserTransaction, err := this.BuildRawUserTransaction(context, sender, payload, price, DEFAULT_MAX_GAS_AMOUNT, state.SequenceNumber)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user transaction failed")
 	}
 
-	return this.SubmitTransaction(privateKey, rawUserTransaction)
+	return this.SubmitTransaction(context, privateKey, rawUserTransaction)
 }
 
-func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, receiver types.AccountAddress, amount serde.Uint128, price int, gasLimit, seq uint64) (*types.RawUserTransaction, error) {
+func (this *StarcoinClient) BuildTransferStcTxn(context context.Context, sender types.AccountAddress, receiver types.AccountAddress,
+	amount serde.Uint128, price int, gasLimit, seq uint64) (*types.RawUserTransaction, error) {
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
 	if err != nil {
 		return nil, errors.Wrap(err, "decode core address failed")
@@ -396,11 +378,12 @@ func (this *StarcoinClient) BuildTransferStcTxn(sender types.AccountAddress, rec
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
 
-	return this.BuildRawUserTransaction(sender, payload, price, gasLimit, seq)
+	return this.BuildRawUserTransaction(context, sender, payload, price, gasLimit, seq)
 }
 
-func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress, payload types.TransactionPayload, gasPrice int, gasLimit uint64, seq uint64) (*types.RawUserTransaction, error) {
-	nodeInfo, err := this.GetNodeInfo()
+func (this *StarcoinClient) BuildRawUserTransaction(context context.Context, sender types.AccountAddress, payload types.TransactionPayload,
+	gasPrice int, gasLimit uint64, seq uint64) (*types.RawUserTransaction, error) {
+	nodeInfo, err := this.GetNodeInfo(context)
 	if err != nil {
 		return nil, errors.Wrap(err, "get node info failed ")
 	}
@@ -416,9 +399,9 @@ func (this *StarcoinClient) BuildRawUserTransaction(sender types.AccountAddress,
 	}, nil
 }
 
-func (this *StarcoinClient) GetGasUnitPrice() (int, error) {
+func (this *StarcoinClient) GetGasUnitPrice(context context.Context) (int, error) {
 	var result string
-	err := this.Call("txpool.gas_price", &result, nil)
+	err := this.Call(context, "txpool.gas_price", &result, nil)
 
 	if err != nil {
 		return 1, errors.Wrap(err, "call method txpool.gas_price ")
@@ -427,9 +410,9 @@ func (this *StarcoinClient) GetGasUnitPrice() (int, error) {
 	return strconv.Atoi(result)
 }
 
-func (this *StarcoinClient) CallContract(call ContractCall) (interface{}, error) {
+func (this *StarcoinClient) CallContract(context context.Context, call ContractCall) (interface{}, error) {
 	var result []interface{}
-	err := this.Call("contract.call_v2", &result, []interface{}{call})
+	err := this.Call(context, "contract.call_v2", &result, []interface{}{call})
 
 	if err != nil {
 		return 1, errors.Wrap(err, "call method contract.call_v2 ")
@@ -438,7 +421,29 @@ func (this *StarcoinClient) CallContract(call ContractCall) (interface{}, error)
 	return result, nil
 }
 
-func (this *StarcoinClient) DeployContract(sender types.AccountAddress, privateKey types.Ed25519PrivateKey,
+func (this *StarcoinClient) DryRun(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (interface{}, error) {
+	var result []interface{}
+
+	data, err := txn.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	pk, err := publicKey.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	err = this.Call(context, "contract.dry_run_raw", &result, []interface{}{BytesToHexString(data), BytesToHexString(pk)})
+
+	if err != nil {
+		return 1, errors.Wrap(err, "call method contract.call_v2 ")
+	}
+
+	return result, nil
+}
+
+func (this *StarcoinClient) DeployContract(context context.Context, sender types.AccountAddress, privateKey types.Ed25519PrivateKey,
 	function types.ScriptFunction, code []byte) (string, error) {
 	module := types.Module{
 		Code: code,
@@ -452,21 +457,21 @@ func (this *StarcoinClient) DeployContract(sender types.AccountAddress, privateK
 		Value: pk,
 	}
 
-	price, err := this.GetGasUnitPrice()
+	price, err := this.GetGasUnitPrice(context)
 	if err != nil {
 		return "", errors.Wrap(err, "get gas unit price failed ")
 	}
 
-	state, err := this.GetState("0x" + hex.EncodeToString(sender[:]))
+	state, err := this.GetState(context, "0x"+hex.EncodeToString(sender[:]))
 
 	if err != nil {
 		return "", errors.Wrap(err, "call txpool.submit_hex_transaction ")
 	}
 
-	rawTransactoin, err := this.BuildRawUserTransaction(sender, &packagePayload, price, DEFAULT_MAX_GAS_AMOUNT, state.SequenceNumber)
+	rawTransactoin, err := this.BuildRawUserTransaction(context, sender, &packagePayload, price, DEFAULT_MAX_GAS_AMOUNT, state.SequenceNumber)
 	if err != nil {
 		return emptyString, errors.Wrap(err, "build raw user txn failed")
 	}
 
-	return this.SubmitTransaction(privateKey, rawTransactoin)
+	return this.SubmitTransaction(context, privateKey, rawTransactoin)
 }

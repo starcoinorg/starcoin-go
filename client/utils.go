@@ -62,7 +62,7 @@ func encode_peer_to_peer_v2_script_function(currency types.TypeTag, payee types.
 			Module:   types.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
 			Function: "peer_to_peer_v2",
 			TyArgs:   []types.TypeTag{currency},
-			Args:     []types.TransactionArgument{&types.TransactionArgument__Address{payee}, (*types.TransactionArgument__U128)(&amount)},
+			Args:     [][]byte{encode_address_argument(payee), encode_u128_argument(amount)},
 		},
 	}
 }
@@ -148,13 +148,16 @@ func PublicKeyToAddress(pk [32]byte) string {
 	return fmt.Sprintf("0x%s", hex.EncodeToString(pkBytes))
 }
 
-func ToAccountAddress(addr string) types.AccountAddress {
-	accountBytes, _ := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
+func ToAccountAddress(addr string) (*types.AccountAddress, error) {
+	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
 
-	var addressArray [16]byte
+	var addressArray types.AccountAddress
 
 	copy(addressArray[:], accountBytes[:16])
-	return addressArray
+	return &addressArray, nil
 }
 
 func Verify(pk []byte, message []byte, signature []byte) bool {

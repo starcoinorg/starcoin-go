@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -187,7 +188,7 @@ func (s *stream) setHandler(id uint64, ack chan *ackMessage) {
 }
 
 // Call implements the transport interface
-func (s *stream) Call(method string, out interface{}, params interface{}) error {
+func (s *stream) Call(context context.Context, method string, out interface{}, params interface{}) error {
 	seq := s.incSeq()
 	request := codec.Request{
 		ID:      seq,
@@ -223,7 +224,7 @@ func (s *stream) Call(method string, out interface{}, params interface{}) error 
 	return nil
 }
 
-func (s *stream) unsubscribe(id string) error {
+func (s *stream) unsubscribe(context context.Context, id string) error {
 	s.subsLock.Lock()
 	defer s.subsLock.Unlock()
 
@@ -233,7 +234,7 @@ func (s *stream) unsubscribe(id string) error {
 	delete(s.subs, id)
 
 	var result bool
-	if err := s.Call("starcoin_unsubscribe", &result, id); err != nil {
+	if err := s.Call(context, "starcoin_unsubscribe", &result, id); err != nil {
 		return err
 	}
 	if !result {
@@ -250,16 +251,16 @@ func (s *stream) setSubscription(id string, callback func(b []byte)) {
 }
 
 // Subscribe implements the PubSubTransport interface
-func (s *stream) Subscribe(callback func(b []byte), parms interface{}) (func() error, error) {
+func (s *stream) Subscribe(context context.Context, callback func(b []byte), parms interface{}) (func() error, error) {
 	var out codec.Subscription
-	if err := s.Call("starcoin_subscribe", &out, parms); err != nil {
+	if err := s.Call(context, "starcoin_subscribe", &out, parms); err != nil {
 		return nil, err
 	}
 
 	id := strconv.Itoa(out.ID)
 	s.setSubscription(id, callback)
 	cancel := func() error {
-		return s.unsubscribe(id)
+		return s.unsubscribe(context, id)
 	}
 	return cancel, nil
 }

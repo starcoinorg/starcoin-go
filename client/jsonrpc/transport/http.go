@@ -1,22 +1,25 @@
 package transport
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/pkg/errors"
 	"github.com/starcoinorg/starcoin-go/client/jsonrpc/codec"
-	"github.com/valyala/fasthttp"
+	"io/ioutil"
+	"net/http"
 )
 
 // HTTP is an http transport
 type HTTP struct {
 	addr   string
-	client *fasthttp.Client
+	client *http.Client
 }
 
 func newHTTP(addr string) *HTTP {
 	return &HTTP{
 		addr:   addr,
-		client: &fasthttp.Client{},
+		client: http.DefaultClient,
 	}
 }
 
@@ -26,7 +29,7 @@ func (h *HTTP) Close() error {
 }
 
 // Call implements the transport interface
-func (h *HTTP) Call(method string, out interface{}, params interface{}) error {
+func (h *HTTP) Call(context context.Context, method string, out interface{}, params interface{}) error {
 	// Encode json-rpc request
 	request := codec.Request{
 		Method:  method,
@@ -45,24 +48,25 @@ func (h *HTTP) Call(method string, out interface{}, params interface{}) error {
 		return err
 	}
 
-	req := fasthttp.AcquireRequest()
-	res := fasthttp.AcquireResponse()
+	req, err := http.NewRequest("POST", h.addr, bytes.NewReader(raw))
+	req.WithContext(context)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
-	defer fasthttp.ReleaseRequest(req)
-	defer fasthttp.ReleaseResponse(res)
-
-	req.SetRequestURI(h.addr)
-	req.Header.SetMethod("POST")
-	req.Header.SetContentType("application/json")
-	req.SetBody(raw)
-
-	if err := h.client.Do(req, res); err != nil {
-		return err
+	res, err := h.client.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
 	}
 
 	// Decode json-rpc response
 	var response codec.Response
-	if err := json.Unmarshal(res.Body(), &response); err != nil {
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
 		return errors.Wrap(err, "parse response failed")
 	}
 	if response.Error != nil {
