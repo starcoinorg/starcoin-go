@@ -213,7 +213,7 @@ func TestDeployContract(t *testing.T) {
 		Module:   moduleId,
 		Function: "init",
 		TyArgs:   []types.TypeTag{},
-		Args:     []types.TransactionArgument{},
+		Args:     [][]byte{},
 	}
 	toAddr, _ = ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0")
 	client.DeployContract(context.Background(), *toAddr, privateKey, scriptFunction, code)
@@ -224,7 +224,7 @@ func TestDryRun(t *testing.T) {
 	context := context.Background()
 
 	sender, _ := ToAccountAddress("b75994d55eae88219dc57e7e62a11bc0")
-	senderPk,_ := HexStringToBytes("a173e69a0e9f87be8179181c3174c7fb1b00eee0955eeece5eb7918bb9a43dbc")
+	senderPk, _ := HexStringToBytes("a173e69a0e9f87be8179181c3174c7fb1b00eee0955eeece5eb7918bb9a43dbc")
 	receiver, _ := ToAccountAddress("ab4039861ca47ec349b64ddb862293bf")
 
 	coreAddress, err := hex.DecodeString("00000000000000000000000000000001")
@@ -242,7 +242,7 @@ func TestDryRun(t *testing.T) {
 	}
 	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, *receiver, serde.Uint128{
 		High: 0,
-		Low: 10000,
+		Low:  10000,
 	})
 
 	price, err := client.GetGasUnitPrice(context)
@@ -261,7 +261,7 @@ func TestDryRun(t *testing.T) {
 		t.Error(err, "get user txn failed")
 	}
 
-	result,err := client.DryRun(context,*rawUserTransaction,senderPk)
+	result, err := client.DryRun(context, *rawUserTransaction, senderPk)
 	if err != nil {
 		t.Error(err, "dry run user txn failed")
 	}
