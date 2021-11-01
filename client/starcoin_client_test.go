@@ -247,23 +247,23 @@ func TestDryRun(t *testing.T) {
 
 	price, err := client.GetGasUnitPrice(context)
 	if err != nil {
-		t.Error(err, "get gas unit price failed ")
+		t.Errorf("%+v", err)
 	}
 
 	state, err := client.GetState(context, "0x"+hex.EncodeToString(sender[:]))
 
 	if err != nil {
-		t.Error(err, "call txpool.submit_hex_transaction ")
+		t.Errorf("%+v", err)
 	}
 
 	rawUserTransaction, err := client.BuildRawUserTransaction(context, *sender, payload, price, DEFAULT_MAX_GAS_AMOUNT, state.SequenceNumber)
 	if err != nil {
-		t.Error(err, "get user txn failed")
+		t.Errorf("%+v", err)
 	}
 
-	result, err := client.DryRun(context, *rawUserTransaction, senderPk)
+	result , err := client.DryRun(context, *rawUserTransaction, senderPk)
 	if err != nil {
-		t.Error(err, "dry run user txn failed")
+		t.Errorf("%+v", err)
 	}
 
 	fmt.Println(result)

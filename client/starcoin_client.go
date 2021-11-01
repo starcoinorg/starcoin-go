@@ -422,20 +422,14 @@ func (this *StarcoinClient) CallContract(context context.Context,call ContractCa
 }
 
 func (this *StarcoinClient) DryRun(context context.Context,txn types.RawUserTransaction,publicKey types.Ed25519PublicKey) (interface{}, error) {
-	var result []interface{}
+	var result DryRunResult
 
 	data,err := txn.BcsSerialize()
 	if err != nil {
 		return nil,errors.WithStack(err)
 	}
 
-	pk , err := publicKey.BcsSerialize()
-	if err != nil {
-		return nil,errors.WithStack(err)
-	}
-
-	err = this.Call(context,"contract.dry_run_raw", &result, []interface{}{ BytesToHexString(data),  BytesToHexString(pk) })
-
+	err = this.Call(context,"contract.dry_run_raw", &result, []interface{}{ BytesToHexString(data), BytesToHexString(publicKey)  })
 	if err != nil {
 		return 1, errors.Wrap(err, "call method contract.call_v2 ")
 	}

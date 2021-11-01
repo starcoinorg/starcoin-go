@@ -106,106 +106,129 @@ type Block struct {
 	Uncles      []BlockHeader `json:"uncles"`
 }
 
-func (block Block) GetHeader() (*types.BlockHeader,error){
-	parentHash,err := HexStringToBytes(block.BlockHeader.ParentHash)
+type DryRunResult struct {
+	ExplainedStatus string     `json:"explained_status"`
+	Events          []Event    `json:"events"`
+	GasUsed         string     `json:"gas_used"`
+	Status          string     `json:"status"`
+	WriteSet        []WriteSet `json:"write_set"`
+}
+
+type WriteSet struct {
+	AccessPath string `json:"access_path"`
+	Action     string `json:"action"`
+	Value      struct {
+		Resource struct {
+			Raw  string `json:"raw"`
+			JSON struct {
+				Fee struct {
+					Value int `json:"value"`
+				} `json:"fee"`
+			} `json:"json"`
+		} `json:"Resource"`
+	} `json:"value"`
+}
+
+func (block Block) GetHeader() (*types.BlockHeader, error) {
+	parentHash, err := HexStringToBytes(block.BlockHeader.ParentHash)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	ts,err := strconv.Atoi(block.BlockHeader.Timestamp)
+	ts, err := strconv.Atoi(block.BlockHeader.Timestamp)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	number ,err := strconv.Atoi(block.BlockHeader.Height)
+	number, err := strconv.Atoi(block.BlockHeader.Height)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	author ,err := ToAccountAddress(block.BlockHeader.Author)
+	author, err := ToAccountAddress(block.BlockHeader.Author)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	var authKey types.AuthenticationKey
-	authKey,err = HexStringToBytes(block.BlockHeader.AuthorAuthKey)
+	authKey, err = HexStringToBytes(block.BlockHeader.AuthorAuthKey)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	txnAccumulatorRoot ,err := HexStringToBytes(block.BlockHeader.TxnAccumulatorRoot)
+	txnAccumulatorRoot, err := HexStringToBytes(block.BlockHeader.TxnAccumulatorRoot)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	blockAccumulatorRoot ,err := HexStringToBytes(block.BlockHeader.BlockAccumulatorRoot)
+	blockAccumulatorRoot, err := HexStringToBytes(block.BlockHeader.BlockAccumulatorRoot)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	stateRoot ,err := HexStringToBytes(block.BlockHeader.StateRoot)
+	stateRoot, err := HexStringToBytes(block.BlockHeader.StateRoot)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	gasUsed ,err := strconv.Atoi(block.BlockHeader.GasUsed)
+	gasUsed, err := strconv.Atoi(block.BlockHeader.GasUsed)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	diff ,err := HexStringToBytes(block.BlockHeader.DifficultyHexStr)
+	diff, err := HexStringToBytes(block.BlockHeader.DifficultyHexStr)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	var difficulty [32]uint8
-	copy(difficulty[:],diff[:32])
+	copy(difficulty[:], diff[:32])
 
-	bodyHash ,err := HexStringToBytes(block.BlockHeader.BodyHash)
+	bodyHash, err := HexStringToBytes(block.BlockHeader.BodyHash)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	extra,err := HexStringToBytes(block.BlockHeader.Extra)
+	extra, err := HexStringToBytes(block.BlockHeader.Extra)
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	var blockExtra [4]uint8
-	copy(blockExtra[:],extra[:4])
+	copy(blockExtra[:], extra[:4])
 
 	result := types.BlockHeader{
-		ParentHash:parentHash,
-		Timestamp:uint64(ts),
-		Number: uint64(number),
-		Author:  *author,
-		AuthorAuthKey: &authKey,
-		TxnAccumulatorRoot:txnAccumulatorRoot,
-		BlockAccumulatorRoot:blockAccumulatorRoot,
-		StateRoot: stateRoot,
-		GasUsed: uint64(gasUsed),
-		Difficulty: difficulty,
-		BodyHash: bodyHash,
-		ChainId: types.ChainId{ Id: uint8(block.BlockHeader.ChainId) },
-		Nonce: uint32(block.BlockHeader.Nonce),
-		Extra: blockExtra,
+		ParentHash:           parentHash,
+		Timestamp:            uint64(ts),
+		Number:               uint64(number),
+		Author:               *author,
+		AuthorAuthKey:        &authKey,
+		TxnAccumulatorRoot:   txnAccumulatorRoot,
+		BlockAccumulatorRoot: blockAccumulatorRoot,
+		StateRoot:            stateRoot,
+		GasUsed:              uint64(gasUsed),
+		Difficulty:           difficulty,
+		BodyHash:             bodyHash,
+		ChainId:              types.ChainId{Id: uint8(block.BlockHeader.ChainId)},
+		Nonce:                uint32(block.BlockHeader.Nonce),
+		Extra:                blockExtra,
 	}
-	return &result,nil
+	return &result, nil
 }
 
-func (block Block) GetHeaderHash() (*types.HashValue,error) {
-	header,err := block.GetHeader()
+func (block Block) GetHeaderHash() (*types.HashValue, error) {
+	header, err := block.GetHeader()
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
-	headerBytes ,err := header.BcsSerialize()
+	headerBytes, err := header.BcsSerialize()
 	if err != nil {
-		return nil,errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	var result types.HashValue
 	result = Hash(PrefixHash("BlockHeader"), headerBytes)
 
-	return &result,nil
+	return &result, nil
 }
 
 type BlockBody struct {
@@ -313,13 +336,13 @@ type NodeInfo struct {
 	NowSeconds int `json:"now_seconds"`
 }
 
-func (info NodeInfo) GetBlockNumber() (uint64,error){
-	number ,err := strconv.Atoi(info.PeerInfo.ChainInfo.Header.Height)
+func (info NodeInfo) GetBlockNumber() (uint64, error) {
+	number, err := strconv.Atoi(info.PeerInfo.ChainInfo.Header.Height)
 	if err != nil {
-		return 0,errors.WithStack(err)
+		return 0, errors.WithStack(err)
 	}
 
-	return uint64(number),nil
+	return uint64(number), nil
 }
 
 type ContractCall struct {
