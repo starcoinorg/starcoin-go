@@ -28,6 +28,6 @@ func (c *Client) Close() error {
 }
 
 // Call makes a jsonrpc call
-func (c *Client) Call(context context.Context,method string, out interface{}, params interface{}) error {
-	return c.transport.Call(context,method, out, params)
+func (c *Client) Call(context context.Context, method string, out interface{}, params interface{}) error {
+	return c.transport.Call(context, method, out, params)
 }

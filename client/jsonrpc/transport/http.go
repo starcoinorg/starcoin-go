@@ -29,7 +29,7 @@ func (h *HTTP) Close() error {
 }
 
 // Call implements the transport interface
-func (h *HTTP) Call(context context.Context,method string, out interface{}, params interface{}) error {
+func (h *HTTP) Call(context context.Context, method string, out interface{}, params interface{}) error {
 	// Encode json-rpc request
 	request := codec.Request{
 		Method:  method,
@@ -48,21 +48,21 @@ func (h *HTTP) Call(context context.Context,method string, out interface{}, para
 		return err
 	}
 
-	req,err := http.NewRequest("POST",h.addr,bytes.NewReader(raw))
+	req, err := http.NewRequest("POST", h.addr, bytes.NewReader(raw))
 	req.WithContext(context)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
 	res, err := h.client.Do(req)
-	if err != nil  {
+	if err != nil {
 		return errors.WithStack(err)
 	}
 
 	// Decode json-rpc response
 	var response codec.Response
 	defer res.Body.Close()
-	body,err := ioutil.ReadAll(res.Body)
-	if err != nil  {
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
 		return errors.WithStack(err)
 	}
 

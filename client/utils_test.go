@@ -38,18 +38,18 @@ func TestBigIntU128(t *testing.T) {
 
 func TestGetRawUserTransactionHash(t *testing.T) {
 	txnString := "b75994d55eae88219dc57e7e62a11bc0040000000000000002000000000000000000000000000000010f5472616e73666572536372697074730c706565725f746f5f706565720107000000000000000000000000000000010353544303535443000310703038dffdf4db03ad11fc75cfdec5952120826cf2fd51e9fa87378d385c347599f609457b466bcb97d81e22608247440c8f10c8000000000000000000000000000000204e00000000000001000000000000000d3078313a3a5354433a3a5354438f9c000000000000fe"
-	txnData,err := hex.DecodeString(txnString)
+	txnData, err := hex.DecodeString(txnString)
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	txn,err := types.BcsDeserializeRawUserTransaction(txnData)
+	txn, err := types.BcsDeserializeRawUserTransaction(txnData)
 	if err != nil {
 		t.Error(err)
 	}
 
-	txnHashBytes,err := GetRawUserTransactionHash(txn)
+	txnHashBytes, err := GetRawUserTransactionHash(txn)
 	if err != nil {
 		t.Error(err)
 	}
@@ -63,18 +63,18 @@ func TestGetRawUserTransactionHash(t *testing.T) {
 
 func TestGetSingedUserTransactionHash(t *testing.T) {
 	txnString := "b75994d55eae88219dc57e7e62a11bc0060000000000000002000000000000000000000000000000010f5472616e73666572536372697074730c706565725f746f5f706565720107000000000000000000000000000000010353544303535443000310703038dffdf4db03ad11fc75cfdec5952120826cf2fd51e9fa87378d385c347599f609457b466bcb97d81e22608247440c8f10c8000000000000000000000000000000204e00000000000001000000000000000d3078313a3a5354433a3a535443a49c000000000000fe0020a173e69a0e9f87be8179181c3174c7fb1b00eee0955eeece5eb7918bb9a43dbc4080bcd888d3ff8986606af017bc1af5464595a7c2a60fac0171553a61420c6bf1cf620005f1ecad3b8bc48e78741dce48a505a6c4d03a3062ec206702144d6106"
-	txnData,err := hex.DecodeString(txnString)
+	txnData, err := hex.DecodeString(txnString)
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	txn,err := types.BcsDeserializeSignedUserTransaction(txnData)
+	txn, err := types.BcsDeserializeSignedUserTransaction(txnData)
 	if err != nil {
 		t.Error(err)
 	}
 
-	txnHashBytes,err := GetSignedUserTransactionHash(txn)
+	txnHashBytes, err := GetSignedUserTransactionHash(txn)
 	if err != nil {
 		t.Error(err)
 	}

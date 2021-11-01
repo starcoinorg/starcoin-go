@@ -261,7 +261,7 @@ func TestDryRun(t *testing.T) {
 		t.Errorf("%+v", err)
 	}
 
-	result , err := client.DryRun(context, *rawUserTransaction, senderPk)
+	result, err := client.DryRun(context, *rawUserTransaction, senderPk)
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
