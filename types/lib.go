@@ -2216,7 +2216,7 @@ type ScriptFunction struct {
 	Module   ModuleId
 	Function Identifier
 	TyArgs   []TypeTag
-	Args     []TransactionArgument
+	Args     [][]byte
 }
 
 func (obj *ScriptFunction) Serialize(serializer serde.Serializer) error {
@@ -2232,7 +2232,7 @@ func (obj *ScriptFunction) Serialize(serializer serde.Serializer) error {
 	if err := serialize_vector_TypeTag(obj.TyArgs, serializer); err != nil {
 		return err
 	}
-	if err := serialize_vector_TransactionArgument(obj.Args, serializer); err != nil {
+	if err := serialize_vector_bytes(obj.Args, serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
@@ -2270,7 +2270,7 @@ func DeserializeScriptFunction(deserializer serde.Deserializer) (ScriptFunction,
 	} else {
 		return obj, err
 	}
-	if val, err := deserialize_vector_TransactionArgument(deserializer); err == nil {
+	if val, err := deserialize_vector_bytes(deserializer); err == nil {
 		obj.Args = val
 	} else {
 		return obj, err
@@ -2840,6 +2840,27 @@ func DeserializeTransactionArgument(deserializer serde.Deserializer) (Transactio
 			return nil, err
 		}
 
+	case 6:
+		if val, err := load_TransactionArgument__VecU128(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 7:
+		if val, err := load_TransactionArgument__VecAccountAddress(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 8:
+		if val, err := load_TransactionArgument__VecBytes(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
 	default:
 		return nil, fmt.Errorf("Unknown variant index for TransactionArgument: %d", index)
 	}
@@ -3104,6 +3125,135 @@ func load_TransactionArgument__Bool(deserializer serde.Deserializer) (Transactio
 	}
 	deserializer.DecreaseContainerDepth()
 	return (TransactionArgument__Bool)(obj), nil
+}
+
+type TransactionArgument__VecU128 struct {
+	Value VecU128
+}
+
+func (*TransactionArgument__VecU128) isTransactionArgument() {}
+
+func (obj *TransactionArgument__VecU128) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(6)
+	if err := obj.Value.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *TransactionArgument__VecU128) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_TransactionArgument__VecU128(deserializer serde.Deserializer) (TransactionArgument__VecU128, error) {
+	var obj TransactionArgument__VecU128
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeVecU128(deserializer); err == nil {
+		obj.Value = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type TransactionArgument__VecAccountAddress struct {
+	Value VecAccountAddress
+}
+
+func (*TransactionArgument__VecAccountAddress) isTransactionArgument() {}
+
+func (obj *TransactionArgument__VecAccountAddress) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(7)
+	if err := obj.Value.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *TransactionArgument__VecAccountAddress) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_TransactionArgument__VecAccountAddress(deserializer serde.Deserializer) (TransactionArgument__VecAccountAddress, error) {
+	var obj TransactionArgument__VecAccountAddress
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeVecAccountAddress(deserializer); err == nil {
+		obj.Value = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type TransactionArgument__VecBytes struct {
+	Value VecBytes
+}
+
+func (*TransactionArgument__VecBytes) isTransactionArgument() {}
+
+func (obj *TransactionArgument__VecBytes) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(8)
+	if err := obj.Value.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *TransactionArgument__VecBytes) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_TransactionArgument__VecBytes(deserializer serde.Deserializer) (TransactionArgument__VecBytes, error) {
+	var obj TransactionArgument__VecBytes
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeVecBytes(deserializer); err == nil {
+		obj.Value = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
 }
 
 type TransactionAuthenticator interface {
@@ -3955,6 +4105,159 @@ func load_TypeTag__Struct(deserializer serde.Deserializer) (TypeTag__Struct, err
 	return obj, nil
 }
 
+type VecAccountAddress []AccountAddress
+
+func (obj *VecAccountAddress) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := serialize_vector_AccountAddress(([]AccountAddress)(*obj), serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *VecAccountAddress) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeVecAccountAddress(deserializer serde.Deserializer) (VecAccountAddress, error) {
+	var obj []AccountAddress
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return (VecAccountAddress)(obj), err
+	}
+	if val, err := deserialize_vector_AccountAddress(deserializer); err == nil {
+		obj = val
+	} else {
+		return (VecAccountAddress)(obj), err
+	}
+	deserializer.DecreaseContainerDepth()
+	return (VecAccountAddress)(obj), nil
+}
+
+func BcsDeserializeVecAccountAddress(input []byte) (VecAccountAddress, error) {
+	if input == nil {
+		var obj VecAccountAddress
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeVecAccountAddress(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type VecBytes [][]byte
+
+func (obj *VecBytes) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := serialize_vector_bytes(([][]byte)(*obj), serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *VecBytes) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeVecBytes(deserializer serde.Deserializer) (VecBytes, error) {
+	var obj [][]byte
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return (VecBytes)(obj), err
+	}
+	if val, err := deserialize_vector_bytes(deserializer); err == nil {
+		obj = val
+	} else {
+		return (VecBytes)(obj), err
+	}
+	deserializer.DecreaseContainerDepth()
+	return (VecBytes)(obj), nil
+}
+
+func BcsDeserializeVecBytes(input []byte) (VecBytes, error) {
+	if input == nil {
+		var obj VecBytes
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeVecBytes(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type VecU128 []serde.Uint128
+
+func (obj *VecU128) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := serialize_vector_u128(([]serde.Uint128)(*obj), serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *VecU128) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeVecU128(deserializer serde.Deserializer) (VecU128, error) {
+	var obj []serde.Uint128
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return (VecU128)(obj), err
+	}
+	if val, err := deserialize_vector_u128(deserializer); err == nil {
+		obj = val
+	} else {
+		return (VecU128)(obj), err
+	}
+	deserializer.DecreaseContainerDepth()
+	return (VecU128)(obj), nil
+}
+
+func BcsDeserializeVecU128(input []byte) (VecU128, error) {
+	if input == nil {
+		var obj VecU128
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeVecU128(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
 type WithdrawCapabilityResource struct {
 	AccountAddress AccountAddress
 }
@@ -4469,6 +4772,34 @@ func deserialize_tuple2_AccessPath_WriteOp(deserializer serde.Deserializer) (str
 	return obj, nil
 }
 
+func serialize_vector_AccountAddress(value []AccountAddress, serializer serde.Serializer) error {
+	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
+		return err
+	}
+	for _, item := range value {
+		if err := item.Serialize(serializer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_vector_AccountAddress(deserializer serde.Deserializer) ([]AccountAddress, error) {
+	length, err := deserializer.DeserializeLen()
+	if err != nil {
+		return nil, err
+	}
+	obj := make([]AccountAddress, length)
+	for i := range obj {
+		if val, err := DeserializeAccountAddress(deserializer); err == nil {
+			obj[i] = val
+		} else {
+			return nil, err
+		}
+	}
+	return obj, nil
+}
+
 func serialize_vector_ArgumentABI(value []ArgumentABI, serializer serde.Serializer) error {
 	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
 		return err
@@ -4517,34 +4848,6 @@ func deserialize_vector_Module(deserializer serde.Deserializer) ([]Module, error
 	obj := make([]Module, length)
 	for i := range obj {
 		if val, err := DeserializeModule(deserializer); err == nil {
-			obj[i] = val
-		} else {
-			return nil, err
-		}
-	}
-	return obj, nil
-}
-
-func serialize_vector_TransactionArgument(value []TransactionArgument, serializer serde.Serializer) error {
-	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
-		return err
-	}
-	for _, item := range value {
-		if err := item.Serialize(serializer); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deserialize_vector_TransactionArgument(deserializer serde.Deserializer) ([]TransactionArgument, error) {
-	length, err := deserializer.DeserializeLen()
-	if err != nil {
-		return nil, err
-	}
-	obj := make([]TransactionArgument, length)
-	for i := range obj {
-		if val, err := DeserializeTransactionArgument(deserializer); err == nil {
 			obj[i] = val
 		} else {
 			return nil, err
@@ -4666,6 +4969,34 @@ func deserialize_vector_tuple2_AccessPath_WriteOp(deserializer serde.Deserialize
 	}, length)
 	for i := range obj {
 		if val, err := deserialize_tuple2_AccessPath_WriteOp(deserializer); err == nil {
+			obj[i] = val
+		} else {
+			return nil, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_vector_u128(value []serde.Uint128, serializer serde.Serializer) error {
+	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
+		return err
+	}
+	for _, item := range value {
+		if err := serializer.SerializeU128(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_vector_u128(deserializer serde.Deserializer) ([]serde.Uint128, error) {
+	length, err := deserializer.DeserializeLen()
+	if err != nil {
+		return nil, err
+	}
+	obj := make([]serde.Uint128, length)
+	for i := range obj {
+		if val, err := deserializer.DeserializeU128(); err == nil {
 			obj[i] = val
 		} else {
 			return nil, err
