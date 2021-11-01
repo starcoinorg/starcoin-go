@@ -9,7 +9,7 @@ import (
 // Transport is an inteface for transport methods to send jsonrpc requests
 type Transport interface {
 	// Call makes a jsonrpc request
-	Call(context context.Context,method string, out interface{}, params interface{}) error
+	Call(context context.Context, method string, out interface{}, params interface{}) error
 
 	// Close closes the transport connection if necessary
 	Close() error
@@ -18,7 +18,7 @@ type Transport interface {
 // PubSubTransport is a transport that allows subscriptions
 type PubSubTransport interface {
 	// Subscribe starts a subscription to a new event
-	Subscribe(context context.Context,callback func(b []byte), args interface{}) (func() error, error)
+	Subscribe(context context.Context, callback func(b []byte), args interface{}) (func() error, error)
 }
 
 const (
