@@ -3,10 +3,11 @@ package client
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/starcoinorg/starcoin-go/types"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/starcoinorg/starcoin-go/types"
 
 	"github.com/pkg/errors"
 )
@@ -226,7 +227,7 @@ func (block Block) GetHeaderHash() (*types.HashValue, error) {
 	}
 
 	var result types.HashValue
-	result = Hash(PrefixHash("BlockHeader"), headerBytes)
+	result = types.Hash(types.PrefixHash("BlockHeader"), headerBytes)
 
 	return &result, nil
 }
