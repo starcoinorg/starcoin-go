@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"github.com/starcoinorg/starcoin-go/types"
@@ -421,7 +423,7 @@ func (this *StarcoinClient) CallContract(context context.Context, call ContractC
 	return result, nil
 }
 
-func (this *StarcoinClient) DryRun(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (interface{}, error) {
+func (this *StarcoinClient) DryRunRaw(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (interface{}, error) {
 	var result DryRunResult
 
 	data, err := txn.BcsSerialize()
@@ -431,10 +433,50 @@ func (this *StarcoinClient) DryRun(context context.Context, txn types.RawUserTra
 
 	err = this.Call(context, "contract.dry_run_raw", &result, []interface{}{BytesToHexString(data), BytesToHexString(publicKey)})
 	if err != nil {
-		return 1, errors.Wrap(err, "call method contract.call_v2 ")
+		return 1, errors.Wrap(err, "call method contract.dry_run_raw ")
 	}
 
 	return result, nil
+}
+
+func (this *StarcoinClient) EstimateGas(context context.Context, chainId int, gasUnitPrice int, maxGasAmount uint64,
+	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber uint64,
+	code string, typeArgs []string, args []string) (*big.Int, error) {
+	result, err := this.DryRun(context, chainId, gasUnitPrice, maxGasAmount, senderAddress, publicKey, accountSeqNumber, code, typeArgs, args)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method DryRun ")
+	}
+	if !strings.EqualFold("Executed", result.ExplainedStatus) {
+		return nil, errors.Wrap(err, "DryRun result ExplainedStatus is not 'Executed' ")
+	}
+	i := new(big.Int)
+	i.SetString(result.GasUsed, 10)
+	return i, nil
+}
+
+func (this *StarcoinClient) DryRun(context context.Context, chainId int, gasUnitPrice int, maxGasAmount uint64,
+	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber uint64,
+	code string, typeArgs []string, args []string) (*DryRunResult, error) {
+	var result DryRunResult
+	dryRunParam := DryRunParam{
+		ChainId:         chainId & 0xFF,
+		GasUnitPrice:    gasUnitPrice,
+		Sender:          senderAddress,
+		SenderPublicKey: BytesToHexString(publicKey),
+		SequenceNumber:  accountSeqNumber,
+		MaxGasAmount:    maxGasAmount,
+		Script: DryRunParamScript{
+			Code:     code,
+			TypeArgs: typeArgs,
+			Args:     args,
+		},
+	}
+	err := this.Call(context, "contract.dry_run", &result, []interface{}{dryRunParam})
+	if err != nil {
+		return nil, errors.Wrap(err, "call method contract.dry_run ")
+	}
+
+	return &result, nil
 }
 
 func (this *StarcoinClient) DeployContract(context context.Context, sender types.AccountAddress, privateKey types.Ed25519PrivateKey,

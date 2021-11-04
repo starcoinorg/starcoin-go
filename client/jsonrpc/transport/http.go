@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/pkg/errors"
-	"github.com/starcoinorg/starcoin-go/client/jsonrpc/codec"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/pkg/errors"
+	"github.com/starcoinorg/starcoin-go/client/jsonrpc/codec"
 )
 
 // HTTP is an http transport
@@ -74,7 +75,7 @@ func (h *HTTP) Call(context context.Context, method string, out interface{}, par
 	}
 
 	if err := json.Unmarshal(response.Result, out); err != nil {
-		return errors.Wrap(err, "parse result failed")
+		return errors.Wrap(err, "parse result failed. "+string(response.Result))
 	}
 	return nil
 }
