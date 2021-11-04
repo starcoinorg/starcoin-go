@@ -18,22 +18,10 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-func Hash(prefix, data []byte) []byte {
-	concatData := bytes.Buffer{}
-	concatData.Write(prefix)
-	concatData.Write(data)
-	hashData := sha3.Sum256(concatData.Bytes())
-	return hashData[:]
-}
-
-func PrefixHash(name string) []byte {
-	return Hash([]byte("STARCOIN::"), []byte(name))
-}
-
 func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUserTransaction) (*types.SignedUserTransaction, error) {
 	data := bytes.Buffer{}
 
-	data.Write(PrefixHash("RawUserTransaction"))
+	data.Write(types.PrefixHash("RawUserTransaction"))
 
 	rawTxnBytes, err := rawUserTransaction.BcsSerialize()
 	if err != nil {
@@ -182,7 +170,7 @@ func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	return Hash(PrefixHash("RawUserTransaction"), data), nil
+	return types.Hash(types.PrefixHash("RawUserTransaction"), data), nil
 }
 
 func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte, error) {
@@ -191,5 +179,5 @@ func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte, erro
 		return nil, errors.WithStack(err)
 	}
 
-	return Hash(PrefixHash("SignedUserTransaction"), data), nil
+	return types.Hash(types.PrefixHash("SignedUserTransaction"), data), nil
 }

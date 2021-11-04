@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
@@ -30,4 +31,8 @@ func Hash(prefix, data []byte) []byte {
 
 func PrefixHash(name string) []byte {
 	return Hash([]byte("STARCOIN::"), []byte(name))
+}
+
+func (header BlockHeader) GetDiffculty() *big.Int {
+	return new(big.Int).SetBytes(header.Difficulty[:])
 }
