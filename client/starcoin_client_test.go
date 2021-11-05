@@ -219,7 +219,7 @@ func TestDeployContract(t *testing.T) {
 	client.DeployContract(context.Background(), *toAddr, privateKey, scriptFunction, code)
 }
 
-func TestDryRun(t *testing.T) {
+func TestDryRunRaw(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	context := context.Background()
 
@@ -261,7 +261,37 @@ func TestDryRun(t *testing.T) {
 		t.Errorf("%+v", err)
 	}
 
-	result, err := client.DryRun(context, *rawUserTransaction, senderPk)
+	result, err := client.DryRunRaw(context, *rawUserTransaction, senderPk)
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+
+	fmt.Println(result)
+}
+
+func TestEstimateGas(t *testing.T) {
+	client := NewStarcoinClient("http://localhost:9850")
+	context := context.Background()
+
+	sender := "0x569ab535990a17ac9afd1bc57faec683"
+	senderPk, _ := HexStringToBytes("0xe4cb4052dc3398f3794918f5650fdefb0a5272c4d51220fbf9538ca2c379b00b")
+	receiver := "0x17d882a26d86ccb0eedae1bd3db4f47c"
+
+	price, err := client.GetGasUnitPrice(context)
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+
+	//state, err := client.GetState(context, sender)
+	seqNumber, err := client.GetAccountSequenceNumber(context, sender)
+
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+
+	chainId := 254
+	result, err := client.EstimateGas(context, chainId, price, DEFAULT_MAX_GAS_AMOUNT, sender, senderPk, seqNumber,
+		"0x01::TransferScripts::peer_to_peer_v2", []string{"0x01::STC::STC"}, []string{receiver, "1u128"})
 	if err != nil {
 		t.Errorf("%+v", err)
 	}

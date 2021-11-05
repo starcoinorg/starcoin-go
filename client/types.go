@@ -107,6 +107,22 @@ type Block struct {
 	Uncles      []BlockHeader `json:"uncles"`
 }
 
+type DryRunParam struct {
+	ChainId         int               `json:"chain_id"`
+	GasUnitPrice    int               `json:"gas_unit_price"`
+	Sender          string            `json:"sender"`
+	SenderPublicKey string            `json:"sender_public_key"`
+	SequenceNumber  uint64            `json:"sequence_number"`
+	MaxGasAmount    uint64            `json:"max_gas_amount"`
+	Script          DryRunParamScript `json:"script"`
+}
+
+type DryRunParamScript struct {
+	Code     string   `json:"code"`
+	TypeArgs []string `json:"type_args"`
+	Args     []string `json:"args"`
+}
+
 type DryRunResult struct {
 	ExplainedStatus string     `json:"explained_status"`
 	Events          []Event    `json:"events"`
