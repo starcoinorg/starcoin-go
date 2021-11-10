@@ -301,12 +301,22 @@ func TestEstimateGas(t *testing.T) {
 
 func TestGetEvents(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
+	var to uint64 = 32
 	events, err := client.GetEvents(context.Background(), &EventFilter{
 		FromBlock: 0,
-		ToBlock:   32,
+		ToBlock:   &to,
 	})
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(events)
+}
+
+func TestHeaderByNumber(t *testing.T) {
+	client := NewStarcoinClient("http://localhost:9850")
+	hdr, err := client.HeaderByNumber(context.Background(), 1)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(hdr)
 }
