@@ -435,20 +435,25 @@ func (this *StarcoinClient) CallContract(context context.Context, call ContractC
 	return result, nil
 }
 
-func (this *StarcoinClient) DryRunRaw(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (interface{}, error) {
-	var result DryRunResult
+func (this *StarcoinClient) EstimateGasByDryRunRaw(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (*big.Int, error) {
+	result, err := this.DryRunRaw(context, txn, publicKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method DryRunRaw ")
+	}
+	return extractGasUsed(result)
+}
 
+func (this *StarcoinClient) DryRunRaw(context context.Context, txn types.RawUserTransaction, publicKey types.Ed25519PublicKey) (*DryRunResult, error) {
+	var result DryRunResult
 	data, err := txn.BcsSerialize()
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-
 	err = this.Call(context, "contract.dry_run_raw", &result, []interface{}{BytesToHexString(data), BytesToHexString(publicKey)})
 	if err != nil {
-		return 1, errors.Wrap(err, "call method contract.dry_run_raw ")
+		return nil, errors.Wrap(err, "call method contract.dry_run_raw ")
 	}
-
-	return result, nil
+	return &result, nil
 }
 
 func (this *StarcoinClient) EstimateGas(context context.Context, chainId int, gasUnitPrice int, maxGasAmount uint64,
@@ -458,8 +463,12 @@ func (this *StarcoinClient) EstimateGas(context context.Context, chainId int, ga
 	if err != nil {
 		return nil, errors.Wrap(err, "call method DryRun ")
 	}
+	return extractGasUsed(result)
+}
+
+func extractGasUsed(result *DryRunResult) (*big.Int, error) {
 	if !strings.EqualFold("Executed", result.ExplainedStatus) {
-		return nil, errors.Wrap(err, "DryRun result ExplainedStatus is not 'Executed' ")
+		return nil, fmt.Errorf("DryRun result ExplainedStatus is not 'Executed' ")
 	}
 	i := new(big.Int)
 	i.SetString(result.GasUsed, 10)
@@ -487,7 +496,6 @@ func (this *StarcoinClient) DryRun(context context.Context, chainId int, gasUnit
 	if err != nil {
 		return nil, errors.Wrap(err, "call method contract.dry_run ")
 	}
-
 	return &result, nil
 }
 
