@@ -18,7 +18,6 @@ func (header BlockHeader) GetHash() (*HashValue, error) {
 	result = Hash(PrefixHash("BlockHeader"), headerBytes)
 
 	return &result, nil
-
 }
 
 func Hash(prefix, data []byte) []byte {

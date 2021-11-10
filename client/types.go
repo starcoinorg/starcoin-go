@@ -34,6 +34,34 @@ type BlockHeader struct {
 	TxnAccumulatorRoot   string `json:"txn_accumulator_root"`
 }
 
+func (header *BlockHeader) Hash() []byte {
+	h := types.BlockHeader{
+		ParentHash:           hexToBytes(header.ParentHash), //HashValue
+		Timestamp:            parseUint64(header.Timestamp),
+		Number:               parseUint64(header.Height),                      //uint64
+		Author:               *hexToAccountAddress(header.Author),             //AccountAddress
+		AuthorAuthKey:        nil,                                             //*AuthenticationKey
+		TxnAccumulatorRoot:   hexToBytes(header.TxnAccumulatorRoot),           //HashValue
+		BlockAccumulatorRoot: hexToBytes(header.BlockAccumulatorRoot),         //HashValue
+		StateRoot:            hexToBytes(header.StateRoot),                    //HashValue
+		GasUsed:              parseUint64(header.GasUsed),                     //uint64
+		Difficulty:           hexTo32Uint8(header.DifficultyHexStr),           //[32]uint8
+		BodyHash:             hexToBytes(header.BodyHash),                     //HashValue
+		ChainId:              types.ChainId{Id: uint8(header.ChainId & 0xFF)}, //ChainId
+		Nonce:                uint32(header.Nonce),                            //uint32
+		Extra:                hexTo4Uint8(header.Extra),                       //type BlockHeaderExtra [4]uint8
+	}
+	hash, err := h.GetHash()
+	if err != nil {
+		panic(ParseError{})
+	}
+	bs, err := hash.BcsSerialize()
+	if err != nil {
+		panic(ParseError{})
+	}
+	return bs
+}
+
 type BlockMetadata struct {
 	Author        string `json:"author"`
 	ChainID       string `json:"chain_id"`
@@ -375,4 +403,62 @@ func NewSendRecvEventFilters(addr string, fromBlock uint64) EventFilter {
 		FromBlock: fromBlock,
 		EventKeys: eventKeys,
 	}
+}
+
+type ParseError struct{}
+
+func hexTo4Uint8(h string) [4]uint8 {
+	bs := hexToBytes(h)
+	var us [4]uint8
+	copy(us[:], bs[:4])
+	return us
+}
+
+func hexTo32Uint8(h string) [32]uint8 {
+	bs := hexToBytes(h)
+	var us [32]uint8
+	if len(bs) > 32 {
+		copy(us[:], bs[:32])
+	} else {
+		copy(us[:], bs[:])
+	}
+	return us
+}
+
+func hexToAccountAddress(addr string) *types.AccountAddress {
+	accountBytes := hexToBytes(addr)
+	var addressArray types.AccountAddress
+	copy(addressArray[:], accountBytes[:16])
+	return &addressArray
+}
+
+func parseUint64(str string) uint64 {
+	base := 10
+	if strings.HasPrefix(str, "0x") {
+		str = str[2:]
+		base = 16
+	}
+	i, err := strconv.ParseUint(str, base, 64)
+	if err != nil {
+		panic(ParseError{})
+	}
+	return i
+}
+
+func bytesToHex(b []byte) string {
+	return "0x" + hex.EncodeToString(b)
+}
+
+func hexToBytes(h string) []byte {
+	var bs []byte
+	var err error
+	if !strings.HasPrefix(h, "0x") {
+		bs, err = hex.DecodeString(h)
+	} else {
+		bs, err = hex.DecodeString(h[2:])
+	}
+	if err != nil {
+		panic(ParseError{})
+	}
+	return bs
 }

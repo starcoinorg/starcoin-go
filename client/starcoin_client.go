@@ -140,6 +140,18 @@ func (this *StarcoinClient) GetBlockByNumber(context context.Context, number int
 	return result, nil
 }
 
+func (this *StarcoinClient) HeaderByNumber(context context.Context, number uint64) (*BlockHeader, error) {
+	result := &Block{}
+	params := []uint64{number}
+	err := this.Call(context, "chain.get_block_by_number", result, params)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "call method chain.get_block_by_number ")
+	}
+
+	return &result.BlockHeader, nil
+}
+
 func (this *StarcoinClient) GetBlocksFromNumber(context context.Context, number, count int) ([]Block, error) {
 	var result []Block
 	params := []int{number, count}
