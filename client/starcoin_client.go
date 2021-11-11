@@ -164,6 +164,14 @@ func (this *StarcoinClient) GetBlocksFromNumber(context context.Context, number,
 	return result, nil
 }
 
+func (this *StarcoinClient) GetBalanceOfStc(context context.Context, address string) (*big.Int, error) {
+	ls, err := this.GetResource(context, address)
+	if err != nil {
+		return nil, err
+	}
+	return ls.GetBalanceOfStc()
+}
+
 func (this *StarcoinClient) GetResource(context context.Context, address string) (*ListResource, error) {
 	result := &ListResource{
 		Resources: make(map[string]Resource),
