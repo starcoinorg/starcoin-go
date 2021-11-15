@@ -221,12 +221,7 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	diff, err := HexStringToBytes(block.BlockHeader.DifficultyHexStr)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	var difficulty [32]uint8
-	copy(difficulty[:], diff[:32])
+	difficulty := hexTo32Uint8(block.BlockHeader.DifficultyHexStr)
 
 	bodyHash, err := HexStringToBytes(block.BlockHeader.BodyHash)
 	if err != nil {
