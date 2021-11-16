@@ -34,8 +34,8 @@ type BlockHeader struct {
 	TxnAccumulatorRoot   string `json:"txn_accumulator_root"`
 }
 
-func (header *BlockHeader) Hash() []byte {
-	h := types.BlockHeader{
+func (header *BlockHeader) ToTypesHeader() types.BlockHeader {
+	return types.BlockHeader{
 		ParentHash:           hexToBytes(header.ParentHash), //HashValue
 		Timestamp:            parseUint64(header.Timestamp),
 		Number:               parseUint64(header.Height),                      //uint64
@@ -51,6 +51,9 @@ func (header *BlockHeader) Hash() []byte {
 		Nonce:                uint32(header.Nonce),                            //uint32
 		Extra:                hexTo4Uint8(header.Extra),                       //type BlockHeaderExtra [4]uint8
 	}
+}
+func (header *BlockHeader) Hash() []byte {
+	h := header.ToTypesHeader()
 	hash, err := h.GetHash()
 	if err != nil {
 		panic(ParseError{})
