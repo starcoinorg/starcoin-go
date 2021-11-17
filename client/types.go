@@ -337,7 +337,7 @@ type Kind struct {
 }
 
 type EventFilter struct {
-	Address   string   `json:"addrs,omitempty"`
+	Address   []string `json:"addrs,omitempty"`
 	TypeTags  []string `json:"type_tags"`
 	FromBlock uint64   `json:"from_block"`
 	ToBlock   *uint64  `json:"to_block,omitempty"`
