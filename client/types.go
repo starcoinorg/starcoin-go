@@ -34,35 +34,95 @@ type BlockHeader struct {
 	TxnAccumulatorRoot   string `json:"txn_accumulator_root"`
 }
 
-func (header *BlockHeader) ToTypesHeader() types.BlockHeader {
-	return types.BlockHeader{
-		ParentHash:           hexToBytes(header.ParentHash), //HashValue
-		Timestamp:            parseUint64(header.Timestamp),
-		Number:               parseUint64(header.Height),                      //uint64
-		Author:               *hexToAccountAddress(header.Author),             //AccountAddress
+func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader,error) {
+	parentHash,err :=hexToBytes(header.ParentHash)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	ts,err := parseUint64(header.Timestamp)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	number ,err := parseUint64(header.Height)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	txnRoot ,err := hexToBytes(header.TxnAccumulatorRoot)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	blockRoot, err := hexToBytes(header.BlockAccumulatorRoot)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	stateRoot ,err := hexToBytes(header.StateRoot)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	gasUsed ,err := parseUint64(header.GasUsed)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	bodyHash ,err := hexToBytes(header.BodyHash)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	author ,err := hexToAccountAddress(header.Author)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	diff ,err := hexTo32Uint8(header.DifficultyHexStr)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	extra,err := hexTo4Uint8(header.Extra)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
+	return &types.BlockHeader{
+		ParentHash:           parentHash, //HashValue
+		Timestamp:            ts,
+		Number:               number,                      //uint64
+		Author:               *author,             //AccountAddress
 		AuthorAuthKey:        nil,                                             //*AuthenticationKey
-		TxnAccumulatorRoot:   hexToBytes(header.TxnAccumulatorRoot),           //HashValue
-		BlockAccumulatorRoot: hexToBytes(header.BlockAccumulatorRoot),         //HashValue
-		StateRoot:            hexToBytes(header.StateRoot),                    //HashValue
-		GasUsed:              parseUint64(header.GasUsed),                     //uint64
-		Difficulty:           hexTo32Uint8(header.DifficultyHexStr),           //[32]uint8
-		BodyHash:             hexToBytes(header.BodyHash),                     //HashValue
+		TxnAccumulatorRoot:   txnRoot,           //HashValue
+		BlockAccumulatorRoot: blockRoot,         //HashValue
+		StateRoot:            stateRoot,                    //HashValue
+		GasUsed:              gasUsed,                     //uint64
+		Difficulty:           diff,           //[32]uint8
+		BodyHash:             bodyHash,                     //HashValue
 		ChainId:              types.ChainId{Id: uint8(header.ChainId & 0xFF)}, //ChainId
 		Nonce:                uint32(header.Nonce),                            //uint32
-		Extra:                hexTo4Uint8(header.Extra),                       //type BlockHeaderExtra [4]uint8
-	}
+		Extra:                extra,                       //type BlockHeaderExtra [4]uint8
+	},nil
 }
-func (header *BlockHeader) Hash() []byte {
-	h := header.ToTypesHeader()
+func (header *BlockHeader) Hash() ([]byte,error) {
+	h,err := header.ToTypesHeader()
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
+
 	hash, err := h.GetHash()
 	if err != nil {
-		panic(ParseError{})
+		return nil,errors.WithStack(err)
 	}
+
 	bs, err := hash.BcsSerialize()
 	if err != nil {
-		panic(ParseError{})
+		return nil,errors.WithStack(err)
 	}
-	return bs
+	return bs,nil
 }
 
 type BlockMetadata struct {
@@ -224,7 +284,10 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	difficulty := hexTo32Uint8(block.BlockHeader.DifficultyHexStr)
+	difficulty,err := hexTo32Uint8(block.BlockHeader.DifficultyHexStr)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
 
 	bodyHash, err := HexStringToBytes(block.BlockHeader.BodyHash)
 	if err != nil {
@@ -405,32 +468,43 @@ func NewSendRecvEventFilters(addr string, fromBlock uint64) EventFilter {
 
 type ParseError struct{}
 
-func hexTo4Uint8(h string) [4]uint8 {
-	bs := hexToBytes(h)
+func hexTo4Uint8(h string) ([4]uint8,error) {
 	var us [4]uint8
+	bs,err := hexToBytes(h)
+	if err != nil {
+		return us,errors.WithStack(err)
+	}
 	copy(us[:], bs[:4])
-	return us
+	return us,nil
 }
 
-func hexTo32Uint8(h string) [32]uint8 {
-	bs := hexToBytes(h)
+func hexTo32Uint8(h string) ([32]uint8,error) {
 	var us [32]uint8
+
+	bs,err := hexToBytes(h)
+	if err != nil {
+		return us,errors.WithStack(err)
+	}
+
 	if len(bs) > 32 {
 		copy(us[:], bs[:32])
 	} else {
 		copy(us[:], bs[:])
 	}
-	return us
+	return us,nil
 }
 
-func hexToAccountAddress(addr string) *types.AccountAddress {
-	accountBytes := hexToBytes(addr)
+func hexToAccountAddress(addr string) (*types.AccountAddress,error) {
+	accountBytes,err := hexToBytes(addr)
+	if err != nil {
+		return nil,errors.WithStack(err)
+	}
 	var addressArray types.AccountAddress
 	copy(addressArray[:], accountBytes[:16])
-	return &addressArray
+	return &addressArray,nil
 }
 
-func parseUint64(str string) uint64 {
+func parseUint64(str string) (uint64,error ){
 	base := 10
 	if strings.HasPrefix(str, "0x") {
 		str = str[2:]
@@ -438,16 +512,16 @@ func parseUint64(str string) uint64 {
 	}
 	i, err := strconv.ParseUint(str, base, 64)
 	if err != nil {
-		panic(ParseError{})
+		return 0, errors.WithStack(err)
 	}
-	return i
+	return i,nil
 }
 
 func bytesToHex(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
 }
 
-func hexToBytes(h string) []byte {
+func hexToBytes(h string) ([]byte,error) {
 	var bs []byte
 	var err error
 	if !strings.HasPrefix(h, "0x") {
@@ -456,7 +530,7 @@ func hexToBytes(h string) []byte {
 		bs, err = hex.DecodeString(h[2:])
 	}
 	if err != nil {
-		panic(ParseError{})
+		return nil,errors.WithStack(err)
 	}
-	return bs
+	return bs,nil
 }
