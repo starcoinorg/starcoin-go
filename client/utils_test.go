@@ -90,27 +90,25 @@ func TestGetSingedUserTransactionHash(t *testing.T) {
 }
 
 func TestBlockHeaderHash(t *testing.T) {
-	j := `
-	{
-		"block_hash": "0x6819736ab264bcacc468f64b4e35757f24b18d3a9180cba5c5bac14610c5c968",
-		"parent_hash": "0x3a06de3042a4b8fe156c4ae88d93e7a2e23d621965eddf46351d13d3e8ba3bb6",
-		"timestamp": "1616846974851",
-		"number": "0",
-		"author": "0x00000000000000000000000000000001",
-		"author_auth_key": null,
-		"txn_accumulator_root": "0x3b16c0b5139330b08b5e51808b5e8bb19293923c0c16b9f8ca9bb89b733ca851",
-		"block_accumulator_root": "0x414343554d554c41544f525f504c414345484f4c4445525f4841534800000000",
-		"state_root": "0xf9015ebfbb74d8dbba119f581c2c5046a289c16d01d6e731691f3c3cb82583a1",
-		"gas_used": "0",
-		"difficulty": "0x03bd",
-		"body_hash": "0x9f8f447f9d07a70e549a20ef074e0d4c6fc6b528ee772fcbb101d19b19ba419e",
-		"chain_id": 251,
-		"nonce": 0,
-		"extra": "0x00000000"
-	  }
-	`
+	j := "{\n\t\t\"block_hash\": \"0x6819736ab264bcacc468f64b4e35757f24b18d3a9180cba5c5bac14610c5c968\",\n\t\t\"parent_hash\": \"0x3a06de3042a4b8fe156c4ae88d93e7a2e23d621965eddf46351d13d3e8ba3bb6\",\n\t\t\"timestamp\": \"1616846974851\",\n\t\t\"number\": \"0\",\n\t\t\"author\": \"0x00000000000000000000000000000001\",\n\t\t\"author_auth_key\": null,\n\t\t\"txn_accumulator_root\": \"0x3b16c0b5139330b08b5e51808b5e8bb19293923c0c16b9f8ca9bb89b733ca851\",\n\t\t\"block_accumulator_root\": \"0x414343554d554c41544f525f504c414345484f4c4445525f4841534800000000\",\n\t\t\"state_root\": \"0xf9015ebfbb74d8dbba119f581c2c5046a289c16d01d6e731691f3c3cb82583a1\",\n\t\t\"gas_used\": \"0\",\n\t\t\"difficulty\": \"0x03bd\",\n\t\t\"body_hash\": \"0x9f8f447f9d07a70e549a20ef074e0d4c6fc6b528ee772fcbb101d19b19ba419e\",\n\t\t\"chain_id\": 251,\n\t\t\"nonce\": 0,\n\t\t\"extra\": \"0x00000000\"\n}"
+
+
 	h := BlockHeader{}
 	json.Unmarshal([]byte(j), &h)
-	fmt.Println(h.Hash())
+	th,err :=h.ToTypesHeader()
+	if err != nil {
+		t.Error(err)
+	}
+
+	data,err:=th.BcsSerialize()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(bytesToHex(data))
+	hash,err := th.GetHash()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(bytesToHex(*hash))
 
 }
