@@ -33,7 +33,7 @@ func PrefixHash(name string) []byte {
 }
 
 func ToArrayReverse(arr [32]uint8) []byte {
-	var offset int = 0
+	var offset = 0
 	for i := 0; i < 32; i++ {
 		if arr[i] > 0 {
 			offset = i
@@ -48,6 +48,13 @@ func ToArrayReverse(arr [32]uint8) []byte {
 		}
 	}
 	return x
+}
+
+func ToBcsDifficulty(source [32]uint8) [32]uint8 {
+	var bs = ToArrayReverse(source)
+	var difficulty [32]uint8
+	copy(difficulty[:], bs[:])
+	return difficulty
 }
 
 func (header BlockHeader) GetDiffculty() *big.Int {
