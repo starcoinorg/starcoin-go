@@ -108,6 +108,9 @@ func TestBlockHeaderHash(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Println(bytesToHex(data))
+
+	assert.Equal(t, types.ToBcsDifficulty(hexb), th.Difficulty)
+
 	hash, err := th.GetHash()
 	if err != nil {
 		t.Error(err)
