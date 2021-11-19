@@ -32,6 +32,24 @@ func PrefixHash(name string) []byte {
 	return Hash([]byte("STARCOIN::"), []byte(name))
 }
 
+func ToArrayReverse(arr [32]uint8) []byte {
+	var offset int = 0
+	for i := 0; i < 32; i++ {
+		if arr[i] > 0 {
+			offset = i
+		}
+	}
+	x := make([]byte, 0)
+	for i := 31; i >= 0; i-- {
+		if i > offset {
+			x = append(x, byte(0))
+		} else {
+			x = append(x, byte(arr[offset-i]))
+		}
+	}
+	return x
+}
+
 func (header BlockHeader) GetDiffculty() *big.Int {
 	return new(big.Int).SetBytes(header.Difficulty[:])
 }
