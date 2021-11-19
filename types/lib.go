@@ -4561,7 +4561,8 @@ func deserialize_array16_u8_array(deserializer serde.Deserializer) ([16]uint8, e
 }
 
 func serialize_array32_u8_array(value [32]uint8, serializer serde.Serializer) error {
-	for _, item := range value {
+	var valueBytes = ToArrayReverse(value)
+	for _, item := range valueBytes {
 		if err := serializer.SerializeU8(item); err != nil {
 			return err
 		}

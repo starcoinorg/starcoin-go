@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/starcoinorg/starcoin-go/types"
@@ -90,25 +91,27 @@ func TestGetSingedUserTransactionHash(t *testing.T) {
 }
 
 func TestBlockHeaderHash(t *testing.T) {
-	j := "{\n\t\t\"block_hash\": \"0x6819736ab264bcacc468f64b4e35757f24b18d3a9180cba5c5bac14610c5c968\",\n\t\t\"parent_hash\": \"0x3a06de3042a4b8fe156c4ae88d93e7a2e23d621965eddf46351d13d3e8ba3bb6\",\n\t\t\"timestamp\": \"1616846974851\",\n\t\t\"number\": \"0\",\n\t\t\"author\": \"0x00000000000000000000000000000001\",\n\t\t\"author_auth_key\": null,\n\t\t\"txn_accumulator_root\": \"0x3b16c0b5139330b08b5e51808b5e8bb19293923c0c16b9f8ca9bb89b733ca851\",\n\t\t\"block_accumulator_root\": \"0x414343554d554c41544f525f504c414345484f4c4445525f4841534800000000\",\n\t\t\"state_root\": \"0xf9015ebfbb74d8dbba119f581c2c5046a289c16d01d6e731691f3c3cb82583a1\",\n\t\t\"gas_used\": \"0\",\n\t\t\"difficulty\": \"0x03bd\",\n\t\t\"body_hash\": \"0x9f8f447f9d07a70e549a20ef074e0d4c6fc6b528ee772fcbb101d19b19ba419e\",\n\t\t\"chain_id\": 251,\n\t\t\"nonce\": 0,\n\t\t\"extra\": \"0x00000000\"\n}"
-
+	var hexb, _ = hexTo32Uint8("0x0ce776b7")
+	var reverse = types.ToArrayReverse(hexb)
+	fmt.Println(bytesToHex(reverse))
+	j := "{ \"block_hash\": \"0xa382474d0fd1270f7f98f2bdbd17deaffb14a69d7ba8fd060a032e723f997b4b\",\n      \"parent_hash\": \"0x56e33b25775930e49bd5b053828818540cc16794e22e51ad7133dd93cc753416\",\n      \"timestamp\": \"1637063088165\",\n      \"number\": \"2810118\",\n      \"author\": \"0x46a1d0101f491147902e9e00305107ed\",\n      \"author_auth_key\": null,\n      \"txn_accumulator_root\": \"0x21188c34f41b7d8e8098ffd2917a4fd768a0dbdfb03d100af09d7bc108d0f607\",\n      \"block_accumulator_root\": \"0x4fe2c130d01b498cd6f4b203ec2978ef18906e12ee92dcf6da564d7e54a0c630\",\n      \"state_root\": \"0xbe5d2327c8ff2c81645b7426af0a402979aee3ac2168541209f3806c54e4d607\",\n      \"gas_used\": \"0\",\n      \"difficulty\": \"0x0ce776b7\",\n      \"body_hash\": \"0xc01e0329de6d899348a8ef4bd51db56175b3fa0988e57c3dcec8eaf13a164d97\",\n      \"chain_id\": 1,\n      \"nonce\": 1249902865,\n      \"extra\": \"0x643b0000\" }"
 
 	h := BlockHeader{}
 	json.Unmarshal([]byte(j), &h)
-	th,err :=h.ToTypesHeader()
+	th, err := h.ToTypesHeader()
 	if err != nil {
 		t.Error(err)
 	}
 
-	data,err:=th.BcsSerialize()
+	data, err := th.BcsSerialize()
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(bytesToHex(data))
-	hash,err := th.GetHash()
+	hash, err := th.GetHash()
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(bytesToHex(*hash))
-
+	assert.Equal(t, bytesToHex(*hash), "0xa382474d0fd1270f7f98f2bdbd17deaffb14a69d7ba8fd060a032e723f997b4b")
 }
