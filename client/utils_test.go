@@ -4,8 +4,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/starcoinorg/starcoin-go/types"
 
@@ -117,4 +118,7 @@ func TestBlockHeaderHash(t *testing.T) {
 	}
 	fmt.Println(bytesToHex(*hash))
 	assert.Equal(t, bytesToHex(*hash), "0xa382474d0fd1270f7f98f2bdbd17deaffb14a69d7ba8fd060a032e723f997b4b")
+	hdrHash2, err := h.Hash() // another get header hash method.
+	fmt.Println(bytesToHex(hdrHash2))
+	assert.Equal(t, bytesToHex(*hash), bytesToHex(hdrHash2))
 }
