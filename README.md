@@ -94,7 +94,7 @@ starcoin -n dev --http-apis all console
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 
-	result, err := client.GetResource("0xa76b896725a088beafb470fe93251c4d")
+	result, err := client.ListResource("0xa76b896725a088beafb470fe93251c4d")
 	if err != nil {
 		t.Error(err)
 	}

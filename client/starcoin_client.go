@@ -165,14 +165,14 @@ func (this *StarcoinClient) GetBlocksFromNumber(context context.Context, number,
 }
 
 func (this *StarcoinClient) GetBalanceOfStc(context context.Context, address string) (*big.Int, error) {
-	ls, err := this.GetResource(context, address)
+	ls, err := this.ListResource(context, address)
 	if err != nil {
 		return nil, err
 	}
 	return ls.GetBalanceOfStc()
 }
 
-func (this *StarcoinClient) GetResource(context context.Context, address string) (*ListResource, error) {
+func (this *StarcoinClient) ListResource(context context.Context, address string) (*ListResource, error) {
 	result := &ListResource{
 		Resources: make(map[string]Resource),
 	}
@@ -183,6 +183,27 @@ func (this *StarcoinClient) GetResource(context context.Context, address string)
 		return nil, errors.Wrap(err, "call method state.list_resource ")
 	}
 
+	return result, nil
+}
+
+func (this *StarcoinClient) GetEpochResource(context context.Context, stateroot *string) (*EpochResource, error) {
+	addr := "0x00000000000000000000000000000001"
+	restype := "0x1::Epoch::Epoch"
+	result := &EpochResource{}
+	opt := GetResourceOption{
+		Decode:    true,
+		StateRoot: stateroot,
+	}
+	r, err := this.GetResource(context, addr, restype, opt, result)
+	return r.(*EpochResource), err
+}
+
+func (this *StarcoinClient) GetResource(context context.Context, address string, restype string, opt GetResourceOption, result interface{}) (interface{}, error) {
+	params := []interface{}{address, restype, opt}
+	err := this.Call(context, "state.get_resource", result, params)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method state.get_resource ")
+	}
 	return result, nil
 }
 

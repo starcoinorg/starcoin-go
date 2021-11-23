@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestHttpCall(t *testing.T) {
 
 	fmt.Println(result)
 
-	result, err = client.GetResource(context.Background(), "0xa76b896725a088beafb470fe93251c4d")
+	result, err = client.ListResource(context.Background(), "0xa76b896725a088beafb470fe93251c4d")
 	if err != nil {
 		t.Error(err)
 	}
@@ -104,7 +105,7 @@ func TestBalance(t *testing.T) {
 	client := NewStarcoinClient("http://localhost:9850")
 	var result *ListResource
 
-	result, err := client.GetResource(context.Background(), "0x79f75dc7cb6812760e1afba01dc9380e")
+	result, err := client.ListResource(context.Background(), "0x79f75dc7cb6812760e1afba01dc9380e")
 	if err != nil {
 		t.Error(err)
 	}
@@ -319,4 +320,20 @@ func TestHeaderByNumber(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Println(hdr)
+}
+
+func TestGetEpochResource(t *testing.T) {
+	stateroot := "0x3fda84965ac0b1a9bc70e10e73b56df9a3c5245a639762fa1e4712f4e123a61d"
+	fmt.Println(stateroot)
+	client := NewStarcoinClient("https://barnard-seed.starcoin.org")
+	epochRes, err := client.GetEpochResource(context.Background(), &stateroot)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(epochRes)
+	bs, err := json.Marshal(epochRes)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(string(bs))
 }

@@ -352,6 +352,34 @@ type ListResource struct {
 	Resources map[string]Resource `json:"resources"`
 }
 
+type GetResourceOption struct {
+	Decode    bool    `json:"decode"`
+	StateRoot *string `json:"state_root,omitempty"`
+}
+
+type EpochResource struct {
+	Json *EpochJson `json:"json"`
+	Resource
+}
+
+type EpochJson struct {
+	Number                uint64 `json:"number"`                   //: 8385,
+	StartTime             uint64 `json:"start_time"`               //: 1637658309479,
+	StartBlockNumber      uint64 `json:"start_block_number"`       //: 2001384,
+	EndBlockNumber        uint64 `json:"end_block_number"`         //: 2001624,
+	BlockTimeTarget       uint64 `json:"block_time_target"`        //: 5260,
+	RewardPerBlock        uint64 `json:"reward_per_block"`         //: 5260000000,
+	RewardPerUnclePercent uint64 `json:"reward_per_uncle_percent"` //: 10,
+	BlockDifficutyWindow  uint   `json:"block_difficulty_window"`  //: 24,
+	MaxUnclesPerBlock     uint   `json:"max_uncles_per_block"`     //: 2,
+	BlockGasLimit         uint64 `json:"block_gas_limit"`          //: 50000000,
+	Strategy              uint   `json:"strategy"`                 //: 3,
+	NewEpochEvents        struct {
+		Counter uint64 `json:"counter"` //: 8385,
+		Guid    string `json:"guid"`    //: "0x090000000000000000000000000000000000000000000001"
+	} `json:"new_epoch_events"`
+}
+
 func (this ListResource) GetBalances() (map[string]*big.Int, error) {
 	result := make(map[string]*big.Int)
 
