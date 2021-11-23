@@ -119,12 +119,12 @@ func (header *BlockHeader) Hash() ([]byte, error) {
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-
-	bs, err := hash.BcsSerialize()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	return bs, nil
+	return *hash, nil
+	// bs, err := hash.BcsSerialize()
+	// if err != nil {
+	// 	return nil, errors.WithStack(err)
+	// }
+	// return bs, nil
 }
 
 type BlockMetadata struct {
