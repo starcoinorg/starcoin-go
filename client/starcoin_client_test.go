@@ -338,3 +338,17 @@ func TestGetEpochResource(t *testing.T) {
 	}
 	fmt.Println(string(bs))
 }
+
+func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
+	client := NewStarcoinClient("https://barnard-seed.starcoin.org")
+	h, err := client.HeaderWithDifficutyInfoByNumber(context.Background(), 11)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(h)
+	bs, err := json.Marshal(h)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(string(bs))
+}
