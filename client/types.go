@@ -15,6 +15,12 @@ import (
 const recvPrefix = "0100000000000000"
 const sendPrefix = "0000000000000000"
 
+type BlockHeaderWithDifficutyInfo struct {
+	BlockHeader          BlockHeader `json:"header"`
+	BlockTimeTarget      uint64      `json:"block_time_target,omitempty"`       //: 5260,
+	BlockDifficutyWindow uint        `json:"block_difficulty_window,omitempty"` //: 24,
+}
+
 type BlockHeader struct {
 	Timestamp            string  `json:"timestamp"`
 	Author               string  `json:"author"`
@@ -32,8 +38,6 @@ type BlockHeader struct {
 	ParentHash           string  `json:"parent_hash"`
 	StateRoot            string  `json:"state_root"`
 	TxnAccumulatorRoot   string  `json:"txn_accumulator_root"`
-	BlockTimeTarget      *uint64 `json:"block_time_target,omitempty"`       //: 5260,
-	BlockDifficutyWindow *uint   `json:"block_difficulty_window,omitempty"` //: 24,
 }
 
 func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
