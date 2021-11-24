@@ -186,6 +186,16 @@ func (this *StarcoinClient) ListResource(context context.Context, address string
 	return result, nil
 }
 
+func (this *StarcoinClient) GetEpochResourceByHeight(context context.Context, height uint64) (*EpochResource, error) {
+	h, err := this.HeaderByNumber(context, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method GetEpochResource ")
+	}
+	var stateroot *string
+	stateroot = &h.StateRoot
+	return this.GetEpochResource(context, stateroot)
+}
+
 func (this *StarcoinClient) GetEpochResource(context context.Context, stateroot *string) (*EpochResource, error) {
 	addr := "0x00000000000000000000000000000001"
 	restype := "0x1::Epoch::Epoch"
