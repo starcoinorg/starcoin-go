@@ -16,22 +16,22 @@ const recvPrefix = "0100000000000000"
 const sendPrefix = "0000000000000000"
 
 type BlockHeader struct {
-	Timestamp            string `json:"timestamp"`
-	Author               string `json:"author"`
-	AuthorAuthKey        string `json:"author_auth_key"`
-	BlockAccumulatorRoot string `json:"block_accumulator_root"`
-	BlockHash            string `json:"block_hash"`
-	BodyHash             string `json:"body_hash"`
-	ChainId              int    `json:"chain_id"`
-	DifficultyHexStr     string `json:"difficulty"`
-	Difficulty           uint64 `json:"difficulty_number"`
-	Extra                string `json:"extra"`
-	GasUsed              string `json:"gas_used"`
-	Nonce                uint64 `json:"Nonce"`
-	Height               string `json:"number"`
-	ParentHash           string `json:"parent_hash"`
-	StateRoot            string `json:"state_root"`
-	TxnAccumulatorRoot   string `json:"txn_accumulator_root"`
+	Timestamp            string  `json:"timestamp"`
+	Author               string  `json:"author"`
+	AuthorAuthKey        *string `json:"author_auth_key"`
+	BlockAccumulatorRoot string  `json:"block_accumulator_root"`
+	BlockHash            string  `json:"block_hash"`
+	BodyHash             string  `json:"body_hash"`
+	ChainId              int     `json:"chain_id"`
+	DifficultyHexStr     string  `json:"difficulty"`
+	Difficulty           uint64  `json:"difficulty_number"`
+	Extra                string  `json:"extra"`
+	GasUsed              string  `json:"gas_used"`
+	Nonce                uint64  `json:"Nonce"`
+	Height               string  `json:"number"`
+	ParentHash           string  `json:"parent_hash"`
+	StateRoot            string  `json:"state_root"`
+	TxnAccumulatorRoot   string  `json:"txn_accumulator_root"`
 }
 
 func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
@@ -80,6 +80,16 @@ func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
+	var authorAuthKey *types.AuthenticationKey
+	if header.AuthorAuthKey != nil {
+		var a types.AuthenticationKey
+		a, err := hexToBytes(*header.AuthorAuthKey)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		authorAuthKey = &a
+	}
+
 	diff, err := hexTo32Uint8(header.DifficultyHexStr)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -97,7 +107,7 @@ func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
 		Timestamp:            ts,
 		Number:               number,                                          //uint64
 		Author:               *author,                                         //AccountAddress
-		AuthorAuthKey:        nil,                                             //*AuthenticationKey
+		AuthorAuthKey:        authorAuthKey,                                   //*AuthenticationKey
 		TxnAccumulatorRoot:   txnRoot,                                         //HashValue
 		BlockAccumulatorRoot: blockRoot,                                       //HashValue
 		StateRoot:            stateRoot,                                       //HashValue
@@ -260,12 +270,15 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	var authKey types.AuthenticationKey
-	authKey, err = HexStringToBytes(block.BlockHeader.AuthorAuthKey)
-	if err != nil {
-		return nil, errors.WithStack(err)
+	var authKey *types.AuthenticationKey
+	if block.BlockHeader.AuthorAuthKey != nil {
+		var a types.AuthenticationKey
+		a, err = HexStringToBytes(*block.BlockHeader.AuthorAuthKey)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		authKey = &a
 	}
-
 	txnAccumulatorRoot, err := HexStringToBytes(block.BlockHeader.TxnAccumulatorRoot)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -309,7 +322,7 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		Timestamp:            uint64(ts),
 		Number:               uint64(number),
 		Author:               *author,
-		AuthorAuthKey:        &authKey,
+		AuthorAuthKey:        authKey,
 		TxnAccumulatorRoot:   txnAccumulatorRoot,
 		BlockAccumulatorRoot: blockAccumulatorRoot,
 		StateRoot:            stateRoot,

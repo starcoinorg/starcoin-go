@@ -323,10 +323,11 @@ func TestHeaderByNumber(t *testing.T) {
 }
 
 func TestGetEpochResource(t *testing.T) {
-	stateroot := "0x3fda84965ac0b1a9bc70e10e73b56df9a3c5245a639762fa1e4712f4e123a61d"
-	fmt.Println(stateroot)
+	//stateroot := "0x3fda84965ac0b1a9bc70e10e73b56df9a3c5245a639762fa1e4712f4e123a61d"
+	//fmt.Println(stateroot)
 	client := NewStarcoinClient("https://barnard-seed.starcoin.org")
-	epochRes, err := client.GetEpochResource(context.Background(), &stateroot)
+	//epochRes, err := client.GetEpochResource(context.Background(), &stateroot)
+	epochRes, err := client.GetEpochResourceByHeight(context.Background(), 11)
 	if err != nil {
 		t.Error(err)
 	}

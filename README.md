@@ -125,7 +125,8 @@ starcoin -n dev --http-apis all console
 #### 查询txn
 ```
 	client := NewStarcoinClient("http://localhost:9850")
-    var result interface{}
+	
+	var result interface{}
 
 	result, err = client.GetTransactionByHash("0x0c8cb10681edff02eb100dba665f8df7452fa30307c20d34d462cf653e3bfefa")
 	if err != nil {
