@@ -14,7 +14,8 @@ import "github.com/starcoinorg/starcoin-go"
 
 ### 节点配置
 
-在 starcoin [github](https://github.com/starcoinorg/starcoin) 下载 starcoin 预编译好的包。通过如下命令启动 dev 测试网，当然你也可以启动其他网络如 barnard/main 等等。
+在 starcoin [github](https://github.com/starcoinorg/starcoin) 下载 starcoin 预编译好的包。通过如下命令启动 dev 测试网，当然你也可以启动其他网络如
+barnard/main 等等。
 
 ```
 starcoin -n dev --http-apis all console
@@ -45,6 +46,7 @@ starcoin -n dev --http-apis all console
 ### 签名并发送交易
 
 #### 转账
+
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 	privateKeyString := "7ddee640acc92417aee935daccfa34306b7c2b827a1308711d5b1d9711e1bdac"
@@ -64,6 +66,7 @@ starcoin -n dev --http-apis all console
 ```
 
 #### 部署合约
+
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 	privateKeyString := "7ddee640acc92417aee935daccfa34306b7c2b827a1308711d5b1d9711e1bdac"
@@ -91,6 +94,7 @@ starcoin -n dev --http-apis all console
 ### 根据地址查询链上最新状态或者资源
 
 #### 查询资源
+
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 
@@ -111,6 +115,7 @@ starcoin -n dev --http-apis all console
 ```
 
 #### 查询最新状态
+
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 
@@ -123,6 +128,7 @@ starcoin -n dev --http-apis all console
 ```
 
 #### 查询txn
+
 ```
 	client := NewStarcoinClient("http://localhost:9850")
 	
@@ -145,7 +151,9 @@ starcoin -n dev --http-apis all console
 ```
 
 ### 监听链上Event
+
 #### 监听 txn event
+
 ```
 	client := NewStarcoinClient("ws://localhost:9870")
 
@@ -161,6 +169,7 @@ starcoin -n dev --http-apis all console
 ```
 
 #### 监听 pending transaction
+
 ```
 	client := NewStarcoinClient("ws://localhost:9870")
 

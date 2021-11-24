@@ -346,9 +346,17 @@ func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Println(h)
+	fmt.Println(h.BlockTimeTarget)
+	fmt.Println(h.BlockDifficutyWindow)
 	bs, err := json.Marshal(h)
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(string(bs))
+
+	h2 := &BlockHeaderWithDifficutyInfo{}
+	json.Unmarshal(bs, h2)
+	fmt.Println(h2)
+	fmt.Println(h2.BlockTimeTarget)
+	fmt.Println(h2.BlockDifficutyWindow)
 }
