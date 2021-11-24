@@ -2,8 +2,11 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 	"math/big"
+	"strings"
 
+	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
 )
@@ -32,28 +35,19 @@ func PrefixHash(name string) []byte {
 	return Hash([]byte("STARCOIN::"), []byte(name))
 }
 
-func ToArrayReverse(arr [32]uint8) []byte {
-	var offset = 0
-	for i := 0; i < 32; i++ {
-		if arr[i] > 0 {
-			offset = i
-		}
+func hex2Bytes(str string) []byte {
+	if strings.HasPrefix(str, "0x") {
+		str = str[2:]
 	}
-	x := make([]byte, 0)
-	for i := 31; i >= 0; i-- {
-		if i > offset {
-			x = append(x, byte(0))
-		} else {
-			x = append(x, byte(arr[offset-i]))
-		}
-	}
-	return x
+	h, _ := hex.DecodeString(str)
+	return h
 }
 
-func ToBcsDifficulty(source [32]uint8) [32]uint8 {
-	var bs = ToArrayReverse(source)
+func ToBcsDifficulty(source string) [32]uint8 {
+	z := new(uint256.Int).SetBytes(hex2Bytes(source))
+	b := z.Bytes32()
 	var difficulty [32]uint8
-	copy(difficulty[:], bs[:])
+	copy(difficulty[:], b[:])
 	return difficulty
 }
 
