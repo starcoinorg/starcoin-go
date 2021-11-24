@@ -6,12 +6,10 @@ require (
 	github.com/blocktree/go-owcrypt v1.1.10
 	github.com/buger/jsonparser v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/klauspost/compress v1.4.1 // indirect
-	github.com/klauspost/cpuid v1.2.0 // indirect
+	github.com/holiman/uint256 v1.2.0
 	github.com/novifinancial/serde-reflection/serde-generate/runtime/golang v0.0.0-20210526181959-1694c58d103e
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.7.0 // indirect
-	github.com/valyala/fasthttp v1.4.0
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/sys v0.0.0-20210816183151-1e6c022a8912 // indirect
 )

@@ -92,12 +92,7 @@ func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
 		authorAuthKey = &a
 	}
 
-	diff, err := hexTo32Uint8(header.DifficultyHexStr)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	diff = types.ToBcsDifficulty(diff)
+	diff := types.ToBcsDifficulty(header.DifficultyHexStr)
 
 	extra, err := hexTo4Uint8(header.Extra)
 	if err != nil {
@@ -301,11 +296,7 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	difficulty, err := hexTo32Uint8(block.BlockHeader.DifficultyHexStr)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	difficulty = types.ToBcsDifficulty(difficulty)
+	difficulty := types.ToBcsDifficulty(block.BlockHeader.DifficultyHexStr)
 
 	bodyHash, err := HexStringToBytes(block.BlockHeader.BodyHash)
 	if err != nil {

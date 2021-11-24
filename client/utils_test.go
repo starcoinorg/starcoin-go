@@ -92,10 +92,7 @@ func TestGetSingedUserTransactionHash(t *testing.T) {
 }
 
 func TestBlockHeaderHash(t *testing.T) {
-	var hexb, _ = hexTo32Uint8("0x0ce776b7")
-	var reverse = types.ToArrayReverse(hexb)
-	fmt.Println(bytesToHex(reverse))
-	j := "{ \"block_hash\": \"0xa382474d0fd1270f7f98f2bdbd17deaffb14a69d7ba8fd060a032e723f997b4b\",\n      \"parent_hash\": \"0x56e33b25775930e49bd5b053828818540cc16794e22e51ad7133dd93cc753416\",\n      \"timestamp\": \"1637063088165\",\n      \"number\": \"2810118\",\n      \"author\": \"0x46a1d0101f491147902e9e00305107ed\",\n      \"author_auth_key\": null,\n      \"txn_accumulator_root\": \"0x21188c34f41b7d8e8098ffd2917a4fd768a0dbdfb03d100af09d7bc108d0f607\",\n      \"block_accumulator_root\": \"0x4fe2c130d01b498cd6f4b203ec2978ef18906e12ee92dcf6da564d7e54a0c630\",\n      \"state_root\": \"0xbe5d2327c8ff2c81645b7426af0a402979aee3ac2168541209f3806c54e4d607\",\n      \"gas_used\": \"0\",\n      \"difficulty\": \"0x0ce776b7\",\n      \"body_hash\": \"0xc01e0329de6d899348a8ef4bd51db56175b3fa0988e57c3dcec8eaf13a164d97\",\n      \"chain_id\": 1,\n      \"nonce\": 1249902865,\n      \"extra\": \"0x643b0000\" }"
+	j := "{  \"block_hash\": \"0x1c7fc5950fd763169d561b59bf98ff472bb57a627b9c56d6dac74eca57448619\",\n \"parent_hash\": \"0x7184cdee7929953d36393f1d2f1fd355f0fde1b90cb00e99a223c4661e77bc8f\",\n \"timestamp\": \"1637639173268\",\n \"number\": \"68172\",\n \"author\": \"0x6c73f098dee9b71f14869ce32bcec830\",\n \"author_auth_key\": null,\n \"txn_accumulator_root\": \"0x90b76fa4ff1ef2d3bac35413f1ebee2f91318471d72bf93236648a15cb109af5\",\n \"block_accumulator_root\": \"0x761c7bea0f2d666756ae5a3e8327c9b0df88e205dafbfc8776d3f4b9b7cab11b\",\n \"state_root\": \"0xc7a7d6546297453775bb79c99cabd08b8f7ffd80d513057a40f3a2a42008be34\",\n \"gas_used\": \"0\",\n \"difficulty\": \"0x0100\",\n \"body_hash\": \"0xc01e0329de6d899348a8ef4bd51db56175b3fa0988e57c3dcec8eaf13a164d97\",\n \"chain_id\": 253,\n \"nonce\": 1832351800,\n \"extra\": \"0x00000000\" }"
 
 	h := BlockHeader{}
 	json.Unmarshal([]byte(j), &h)
@@ -110,14 +107,14 @@ func TestBlockHeaderHash(t *testing.T) {
 	}
 	fmt.Println(bytesToHex(data))
 
-	assert.Equal(t, types.ToBcsDifficulty(hexb), th.Difficulty)
+	assert.Equal(t, types.ToBcsDifficulty("0x0100"), th.Difficulty)
 
 	hash, err := th.GetHash()
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(bytesToHex(*hash))
-	assert.Equal(t, bytesToHex(*hash), "0xa382474d0fd1270f7f98f2bdbd17deaffb14a69d7ba8fd060a032e723f997b4b")
+	assert.Equal(t, bytesToHex(*hash), "0x1c7fc5950fd763169d561b59bf98ff472bb57a627b9c56d6dac74eca57448619")
 	hdrHash2, err := h.Hash() // another get header hash method.
 	fmt.Println(bytesToHex(hdrHash2))
 	assert.Equal(t, bytesToHex(*hash), bytesToHex(hdrHash2))
