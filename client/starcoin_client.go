@@ -140,6 +140,21 @@ func (this *StarcoinClient) GetBlockByNumber(context context.Context, number int
 	return result, nil
 }
 
+func (this *StarcoinClient) HeaderWithDifficutyInfoByNumber(context context.Context, number uint64) (*BlockHeader, error) {
+	h, err := this.HeaderByNumber(context, number)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method HeaderByNumber ")
+	}
+	stateroot := h.StateRoot
+	epoch, err := this.GetEpochResource(context, &stateroot)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method GetEpochResource ")
+	}
+	h.BlockTimeTarget = &epoch.Json.BlockTimeTarget
+	h.BlockDifficutyWindow = &epoch.Json.BlockDifficutyWindow
+	return h, nil
+}
+
 func (this *StarcoinClient) HeaderByNumber(context context.Context, number uint64) (*BlockHeader, error) {
 	result := &Block{}
 	params := []uint64{number}
