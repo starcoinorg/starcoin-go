@@ -223,7 +223,13 @@ func (this *StarcoinClient) GetEpochResource(context context.Context, stateroot 
 		StateRoot: stateroot,
 	}
 	r, err := this.GetResource(context, addr, restype, opt, result)
-	return r.(*EpochResource), err
+	if r == nil {
+		return nil, errors.New("get epoch resource return nil")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "call method GetResource ")
+	}
+	return r.(*EpochResource), nil
 }
 
 func (this *StarcoinClient) GetResource(context context.Context, address string, restype string, opt GetResourceOption, result interface{}) (interface{}, error) {
