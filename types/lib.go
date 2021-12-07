@@ -733,6 +733,7 @@ type ContractEvent interface {
 	isContractEvent()
 	Serialize(serializer serde.Serializer) error
 	BcsSerialize() ([]byte, error)
+	CryptoHash() (*HashValue, error)
 }
 
 func DeserializeContractEvent(deserializer serde.Deserializer) (ContractEvent, error) {

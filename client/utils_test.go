@@ -91,6 +91,13 @@ func TestGetSingedUserTransactionHash(t *testing.T) {
 	}
 }
 
+func TestEvent(t *testing.T) {
+	data, _ := hex.DecodeString("0018020000000000000008c1d4d8a1ebfe36dbc8ca3d3ac0f44400000000000000000700000000000000000000000000000001074163636f756e7410416363657074546f6b656e4576656e740033323078303030303030303030303030303030303030303030303030303030303030303130333533353434333033353335343433")
+	event, _ := types.BcsDeserializeContractEvent(data)
+	hash, _ := event.CryptoHash()
+	assert.Equal(t, bytesToHex(*hash), "0x17ad1ee5f39581842b645bc54c4e70b4de0d825aa7e849b2aadcf530c97c5967")
+}
+
 func TestBlockHeaderHash(t *testing.T) {
 	j := "{  \"block_hash\": \"0x1c7fc5950fd763169d561b59bf98ff472bb57a627b9c56d6dac74eca57448619\",\n \"parent_hash\": \"0x7184cdee7929953d36393f1d2f1fd355f0fde1b90cb00e99a223c4661e77bc8f\",\n \"timestamp\": \"1637639173268\",\n \"number\": \"68172\",\n \"author\": \"0x6c73f098dee9b71f14869ce32bcec830\",\n \"author_auth_key\": null,\n \"txn_accumulator_root\": \"0x90b76fa4ff1ef2d3bac35413f1ebee2f91318471d72bf93236648a15cb109af5\",\n \"block_accumulator_root\": \"0x761c7bea0f2d666756ae5a3e8327c9b0df88e205dafbfc8776d3f4b9b7cab11b\",\n \"state_root\": \"0xc7a7d6546297453775bb79c99cabd08b8f7ffd80d513057a40f3a2a42008be34\",\n \"gas_used\": \"0\",\n \"difficulty\": \"0x0100\",\n \"body_hash\": \"0xc01e0329de6d899348a8ef4bd51db56175b3fa0988e57c3dcec8eaf13a164d97\",\n \"chain_id\": 253,\n \"nonce\": 1832351800,\n \"extra\": \"0x00000000\" }"
 

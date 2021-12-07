@@ -23,6 +23,18 @@ func (header BlockHeader) GetHash() (*HashValue, error) {
 	return &result, nil
 }
 
+func (event ContractEvent__V0) CryptoHash() (*HashValue, error) {
+	headerBytes, err := event.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var result HashValue
+	result = Hash(PrefixHash("ContractEvent"), headerBytes)
+
+	return &result, nil
+}
+
 func Hash(prefix, data []byte) []byte {
 	concatData := bytes.Buffer{}
 	concatData.Write(prefix)
