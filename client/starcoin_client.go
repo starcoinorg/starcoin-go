@@ -68,6 +68,17 @@ func (this *StarcoinClient) GetEvents(context context.Context, eventFilter *Even
 	return result, nil
 }
 
+func (this *StarcoinClient) GetTransactionProof(context context.Context, blockHash string, txGlobalIndex uint64, eventIndex *int) (*TransactionProof, error) {
+	result := &TransactionProof{}
+	params := []interface{}{blockHash, txGlobalIndex, eventIndex}
+	err := this.Call(context, "chain.get_transaction_proof", result, params)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "call method chain.get_transaction_proof error ")
+	}
+	return result, nil
+}
+
 func (this *StarcoinClient) GetTransactionByHash(context context.Context, transactionHash string) (*Transaction, error) {
 	result := &Transaction{}
 	params := []string{transactionHash}

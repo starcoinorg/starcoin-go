@@ -301,16 +301,32 @@ func TestEstimateGas(t *testing.T) {
 }
 
 func TestGetEvents(t *testing.T) {
-	client := NewStarcoinClient("http://localhost:9850")
-	var to uint64 = 32
+	client := NewStarcoinClient("https://halley-seed.starcoin.org")
+	var to uint64 = 47583
 	events, err := client.GetEvents(context.Background(), &EventFilter{
-		FromBlock: 0,
+		FromBlock: to - 1,
 		ToBlock:   &to,
 	})
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(events)
+}
+
+func TestGetTransactionProof(t *testing.T) {
+	client := NewStarcoinClient("https://halley-seed.starcoin.org")
+	var eventIndex int = 1
+	p, err := client.GetTransactionProof(context.Background(),
+		"0x815764e45c2f300cfd90e9a693207c0d4f8f2ad1e3e9774f489534f1ab74e3d5", 69937, &eventIndex)
+	if err != nil {
+		t.FailNow()
+	}
+	fmt.Println("--------------- transaction proof -----------------")
+	j, err := json.Marshal(p)
+	if err != nil {
+		t.FailNow()
+	}
+	fmt.Println(string(j))
 }
 
 func TestHeaderByNumber(t *testing.T) {
