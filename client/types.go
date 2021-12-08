@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -195,14 +196,30 @@ type TransactionInfo struct {
 }
 
 type Event struct {
-	BlockHash        string `json:"block_hash"`
-	BlockNumber      string `json:"block_number"`
-	TransactionHash  string `json:"transaction_hash"`
-	TransactionIndex int    `json:"transaction_index"`
-	Data             string `json:"data"`
-	TypeTag          string `json:"type_tag"`
-	EventKey         string `json:"event_key"`
-	EventSeqNumber   string `json:"event_seq_number"`
+	BlockHash              string `json:"block_hash"`
+	BlockNumber            string `json:"block_number"`
+	TransactionHash        string `json:"transaction_hash"`
+	TransactionIndex       int    `json:"transaction_index"`
+	Data                   string `json:"data"`
+	TypeTag                string `json:"type_tag"`
+	EventKey               string `json:"event_key"`
+	EventSeqNumber         string `json:"event_seq_number"`
+	TransactionGlobalIndex string `json:"transaction_global_index"`
+	EventIndex             int    `json:"event_index"`
+}
+
+type TransactionProof struct {
+	TransactionInfo TransactionInfo `json:"transaction_info"`
+	Proof           struct {
+		Siblings []string `json:"siblings"`
+	} `json:"proof"`
+	EventProof struct {
+		Event string `json:"event"`
+		Proof struct {
+			Siblings []string `json:"siblings"`
+		} `json:"proof"`
+	} `json:"event_proof"`
+	StateProof json.RawMessage `json:"state_proof"` //todo??
 }
 
 type Block struct {
