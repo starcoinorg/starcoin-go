@@ -226,6 +226,59 @@ func BcsDeserializeAccountResource(input []byte) (AccountResource, error) {
 	return obj, err
 }
 
+type AccountState struct {
+	StorageRoots []*HashValue
+}
+
+func (obj *AccountState) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := serialize_vector_option_HashValue(obj.StorageRoots, serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *AccountState) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeAccountState(deserializer serde.Deserializer) (AccountState, error) {
+	var obj AccountState
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := deserialize_vector_option_HashValue(deserializer); err == nil {
+		obj.StorageRoots = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeAccountState(input []byte) (AccountState, error) {
+	if input == nil {
+		var obj AccountState
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeAccountState(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
 type ArgumentABI struct {
 	Name    string
 	TypeTag TypeTag
@@ -4637,6 +4690,40 @@ func deserialize_option_AuthenticationKey(deserializer serde.Deserializer) (*Aut
 	}
 }
 
+func serialize_option_HashValue(value *HashValue, serializer serde.Serializer) error {
+	if value != nil {
+		if err := serializer.SerializeOptionTag(true); err != nil {
+			return err
+		}
+		if err := (*value).Serialize(serializer); err != nil {
+			return err
+		}
+	} else {
+		if err := serializer.SerializeOptionTag(false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_option_HashValue(deserializer serde.Deserializer) (*HashValue, error) {
+	tag, err := deserializer.DeserializeOptionTag()
+	if err != nil {
+		return nil, err
+	}
+	if tag {
+		value := new(HashValue)
+		if val, err := DeserializeHashValue(deserializer); err == nil {
+			*value = val
+		} else {
+			return nil, err
+		}
+		return value, nil
+	} else {
+		return nil, nil
+	}
+}
+
 func serialize_option_KeyRotationCapabilityResource(value *KeyRotationCapabilityResource, serializer serde.Serializer) error {
 	if value != nil {
 		if err := serializer.SerializeOptionTag(true); err != nil {
@@ -4933,6 +5020,34 @@ func deserialize_vector_bytes(deserializer serde.Deserializer) ([][]byte, error)
 	obj := make([][]byte, length)
 	for i := range obj {
 		if val, err := deserializer.DeserializeBytes(); err == nil {
+			obj[i] = val
+		} else {
+			return nil, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_vector_option_HashValue(value []*HashValue, serializer serde.Serializer) error {
+	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
+		return err
+	}
+	for _, item := range value {
+		if err := serialize_option_HashValue(item, serializer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_vector_option_HashValue(deserializer serde.Deserializer) ([]*HashValue, error) {
+	length, err := deserializer.DeserializeLen()
+	if err != nil {
+		return nil, err
+	}
+	obj := make([]*HashValue, length)
+	for i := range obj {
+		if val, err := deserialize_option_HashValue(deserializer); err == nil {
 			obj[i] = val
 		} else {
 			return nil, err
