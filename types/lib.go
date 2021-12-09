@@ -2628,6 +2628,130 @@ func BcsDeserializeSigningMessage(input []byte) (SigningMessage, error) {
 	return obj, err
 }
 
+type SparseMerkleInternalNode struct {
+	LeftChild  HashValue
+	RightChild HashValue
+}
+
+func (obj *SparseMerkleInternalNode) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.LeftChild.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.RightChild.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *SparseMerkleInternalNode) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeSparseMerkleInternalNode(deserializer serde.Deserializer) (SparseMerkleInternalNode, error) {
+	var obj SparseMerkleInternalNode
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.LeftChild = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.RightChild = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeSparseMerkleInternalNode(input []byte) (SparseMerkleInternalNode, error) {
+	if input == nil {
+		var obj SparseMerkleInternalNode
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeSparseMerkleInternalNode(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type SparseMerkleLeafNode struct {
+	Key       HashValue
+	ValueHash HashValue
+}
+
+func (obj *SparseMerkleLeafNode) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.Key.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.ValueHash.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *SparseMerkleLeafNode) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeSparseMerkleLeafNode(deserializer serde.Deserializer) (SparseMerkleLeafNode, error) {
+	var obj SparseMerkleLeafNode
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.Key = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.ValueHash = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeSparseMerkleLeafNode(input []byte) (SparseMerkleLeafNode, error) {
+	if input == nil {
+		var obj SparseMerkleLeafNode
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeSparseMerkleLeafNode(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
 type StructTag struct {
 	Address    AccountAddress
 	Module     Identifier

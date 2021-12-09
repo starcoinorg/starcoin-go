@@ -136,18 +136,6 @@ func PublicKeyToAddress(pk [32]byte) string {
 	return fmt.Sprintf("0x%s", hex.EncodeToString(pkBytes))
 }
 
-func ToAccountAddress(addr string) (*types.AccountAddress, error) {
-	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	var addressArray types.AccountAddress
-
-	copy(addressArray[:], accountBytes[:16])
-	return &addressArray, nil
-}
-
 func Verify(pk []byte, message []byte, signature []byte) bool {
 	result := owcrypt.Verify(pk, nil, message, signature, owcrypt.ECC_CURVE_ED25519_NORMAL)
 	if result == owcrypt.SUCCESS {

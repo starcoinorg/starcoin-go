@@ -283,7 +283,7 @@ func (block Block) GetHeader() (*types.BlockHeader, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	author, err := ToAccountAddress(block.BlockHeader.Author)
+	author, err := types.ToAccountAddress(block.BlockHeader.Author)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
