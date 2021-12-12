@@ -302,22 +302,25 @@ func TestEstimateGas(t *testing.T) {
 
 func TestGetEvents(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
-	var to uint64 = 47583
+	var to uint64 = 208141
 	events, err := client.GetEvents(context.Background(), &EventFilter{
 		FromBlock: to - 1,
 		ToBlock:   &to,
+		TypeTags:  []string{"0xe498d62f5d1f469d2f72eb3e9dc8f230::CrossChainManager::CrossChainEvent"},
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(events)
+	j, _ := json.Marshal(events)
+	fmt.Println(string(j))
 }
 
 func TestGetTransactionProof(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
+	blockHash := "0x37e8dd4f432a1c3a7b6dfcaa90ebf2aafa0287678ffe4b8ad2373c5b48ffb20c"
+	var txGlobalIdx uint64 = 231188
 	var eventIndex int = 1
-	p, err := client.GetTransactionProof(context.Background(),
-		"0x815764e45c2f300cfd90e9a693207c0d4f8f2ad1e3e9774f489534f1ab74e3d5", 69937, &eventIndex)
+	p, err := client.GetTransactionProof(context.Background(), blockHash, txGlobalIdx, &eventIndex)
 	if err != nil {
 		t.FailNow()
 	}
