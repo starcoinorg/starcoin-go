@@ -169,3 +169,18 @@ func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte, erro
 
 	return types.Hash(types.PrefixHash("SignedUserTransaction"), data), nil
 }
+
+func EventToContractEventV0(ebs []byte) (*types.ContractEventV0, error) {
+	evt, err := types.BcsDeserializeContractEvent(ebs)
+	if err != nil {
+		return nil, err
+	}
+	switch evt := evt.(type) {
+	case *types.ContractEvent__V0:
+		ev0 := evt.Value
+		return &ev0, nil
+	default:
+		return nil, err
+	}
+
+}

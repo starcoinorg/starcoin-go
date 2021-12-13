@@ -330,6 +330,15 @@ func TestGetTransactionProof(t *testing.T) {
 		t.FailNow()
 	}
 	fmt.Println(string(j))
+	ebs, err := hexToBytes(p.EventProof.Event)
+	if err != nil {
+		t.FailNow()
+	}
+	ev0, err := EventToContractEventV0(ebs)
+	if err != nil {
+		t.FailNow()
+	}
+	fmt.Println(ev0.TypeTag)
 }
 
 func TestHeaderByNumber(t *testing.T) {
