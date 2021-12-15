@@ -383,12 +383,12 @@ func TestHeaderWithDifficultyInfoByNumber(t *testing.T) {
 		t.FailNow()
 	}
 	fmt.Println(string(bs))
-
 	h2 := &BlockHeaderWithDifficultyInfo{}
 	json.Unmarshal(bs, h2)
 	fmt.Println(h2)
 	fmt.Println(h2.BlockTimeTarget)
 	fmt.Println(h2.BlockDifficutyWindow)
+	fmt.Println(h2.BlockInfo)
 }
 
 func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {

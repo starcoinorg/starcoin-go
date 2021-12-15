@@ -18,9 +18,9 @@ const sendPrefix = "0000000000000000"
 
 type BlockHeaderWithDifficultyInfo struct {
 	BlockHeader          BlockHeader `json:"header"`
-	BlockInfo            BlockInfo   `json:"block_info"`
 	BlockTimeTarget      uint64      `json:"block_time_target,omitempty"`       //: 5260,
 	BlockDifficutyWindow uint        `json:"block_difficulty_window,omitempty"` //: 24,
+	BlockInfo            BlockInfo   `json:"block_info"`
 }
 
 type BlockHeaderAndBlockInfo struct {
