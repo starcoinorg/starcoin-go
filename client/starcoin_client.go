@@ -151,6 +151,33 @@ func (this *StarcoinClient) GetBlockByNumber(context context.Context, number int
 	return result, nil
 }
 
+func (this *StarcoinClient) GetBlockInfoByNumber(context context.Context, number uint64) (*BlockInfo, error) {
+	result := &BlockInfo{}
+	params := []uint64{number}
+	err := this.Call(context, "chain.get_block_info_by_number", result, params)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "call method chain.get_block_info_by_number ")
+	}
+
+	return result, nil
+}
+
+func (this *StarcoinClient) GetBlockHeaderAndBlockInfoByNumber(context context.Context, number uint64) (*BlockHeaderAndBlockInfo, error) {
+	hdr, err := this.HeaderByNumber(context, number)
+	if err != nil {
+		return nil, err
+	}
+	bi, err := this.GetBlockInfoByNumber(context, number)
+	if err != nil {
+		return nil, err
+	}
+	return &BlockHeaderAndBlockInfo{
+		BlockHeader: *hdr,
+		BlockInfo:   *bi,
+	}, nil
+}
+
 func (this *StarcoinClient) HeaderWithDifficutyInfoByNumber(context context.Context, number uint64) (*BlockHeaderWithDifficutyInfo, error) {
 	h, err := this.HeaderByNumber(context, number)
 	if err != nil {
