@@ -367,9 +367,9 @@ func TestGetEpochResource(t *testing.T) {
 	fmt.Println(string(bs))
 }
 
-func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
+func TestHeaderWithDifficultyInfoByNumber(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
-	h, err := client.HeaderWithDifficutyInfoByNumber(context.Background(), 175991)
+	h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 175991)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -384,7 +384,7 @@ func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
 	}
 	fmt.Println(string(bs))
 
-	h2 := &BlockHeaderWithDifficutyInfo{}
+	h2 := &BlockHeaderWithDifficultyInfo{}
 	json.Unmarshal(bs, h2)
 	fmt.Println(h2)
 	fmt.Println(h2.BlockTimeTarget)
