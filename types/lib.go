@@ -226,6 +226,86 @@ func BcsDeserializeAccountResource(input []byte) (AccountResource, error) {
 	return obj, err
 }
 
+type AccumulatorInfo struct {
+	AccumulatorRoot    HashValue
+	FrozenSubtreeRoots []HashValue
+	NumLeaves          uint64
+	NumNodes           uint64
+}
+
+func (obj *AccumulatorInfo) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.AccumulatorRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serialize_vector_HashValue(obj.FrozenSubtreeRoots, serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.NumLeaves); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.NumNodes); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *AccumulatorInfo) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeAccumulatorInfo(deserializer serde.Deserializer) (AccumulatorInfo, error) {
+	var obj AccumulatorInfo
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.AccumulatorRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_vector_HashValue(deserializer); err == nil {
+		obj.FrozenSubtreeRoots = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.NumLeaves = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.NumNodes = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeAccumulatorInfo(input []byte) (AccumulatorInfo, error) {
+	if input == nil {
+		var obj AccumulatorInfo
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeAccumulatorInfo(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
 type AccountState struct {
 	StorageRoots []*HashValue
 }
@@ -386,6 +466,86 @@ func BcsDeserializeAuthenticationKey(input []byte) (AuthenticationKey, error) {
 	}
 	deserializer := bcs.NewDeserializer(input)
 	obj, err := DeserializeAuthenticationKey(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type BlockInfo struct {
+	BlockId              HashValue
+	TotalDifficulty      [32]uint8
+	TxnAccumulatorInfo   AccumulatorInfo
+	BlockAccumulatorInfo AccumulatorInfo
+}
+
+func (obj *BlockInfo) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.BlockId.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serialize_array32_u8_array(obj.TotalDifficulty, serializer); err != nil {
+		return err
+	}
+	if err := obj.TxnAccumulatorInfo.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.BlockAccumulatorInfo.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *BlockInfo) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeBlockInfo(deserializer serde.Deserializer) (BlockInfo, error) {
+	var obj BlockInfo
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.BlockId = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_array32_u8_array(deserializer); err == nil {
+		obj.TotalDifficulty = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeAccumulatorInfo(deserializer); err == nil {
+		obj.TxnAccumulatorInfo = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeAccumulatorInfo(deserializer); err == nil {
+		obj.BlockAccumulatorInfo = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeBlockInfo(input []byte) (BlockInfo, error) {
+	if input == nil {
+		var obj BlockInfo
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeBlockInfo(deserializer)
 	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
 		return obj, fmt.Errorf("Some input bytes were not read")
 	}
@@ -5032,6 +5192,34 @@ func deserialize_vector_ArgumentABI(deserializer serde.Deserializer) ([]Argument
 	obj := make([]ArgumentABI, length)
 	for i := range obj {
 		if val, err := DeserializeArgumentABI(deserializer); err == nil {
+			obj[i] = val
+		} else {
+			return nil, err
+		}
+	}
+	return obj, nil
+}
+
+func serialize_vector_HashValue(value []HashValue, serializer serde.Serializer) error {
+	if err := serializer.SerializeLen(uint64(len(value))); err != nil {
+		return err
+	}
+	for _, item := range value {
+		if err := item.Serialize(serializer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deserialize_vector_HashValue(deserializer serde.Deserializer) ([]HashValue, error) {
+	length, err := deserializer.DeserializeLen()
+	if err != nil {
+		return nil, err
+	}
+	obj := make([]HashValue, length)
+	for i := range obj {
+		if val, err := DeserializeHashValue(deserializer); err == nil {
 			obj[i] = val
 		} else {
 			return nil, err

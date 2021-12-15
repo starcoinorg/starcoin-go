@@ -78,7 +78,7 @@ func CreateLiteralHash(word string) (*HashValue, error) {
 	wordBytes := []byte(word)
 	if len(wordBytes) <= 32 {
 		var result HashValue
-		var lenZero int = 32 - len(wordBytes)
+		var lenZero = 32 - len(wordBytes)
 		concatData := bytes.Buffer{}
 		concatData.Write(wordBytes)
 		if lenZero > 0 {
