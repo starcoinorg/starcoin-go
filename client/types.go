@@ -22,6 +22,11 @@ type BlockHeaderWithDifficutyInfo struct {
 	BlockDifficutyWindow uint        `json:"block_difficulty_window,omitempty"` //: 24,
 }
 
+type BlockHeaderAndBlockInfo struct {
+	BlockHeader BlockHeader `json:"header"`
+	BlockInfo   BlockInfo   `json:"block_info"`
+}
+
 type BlockHeader struct {
 	Timestamp            string  `json:"timestamp"`
 	Author               string  `json:"author"`
@@ -498,6 +503,23 @@ type NodeInfo struct {
 		Type string `json:"type"`
 	} `json:"consensus"`
 	NowSeconds int `json:"now_seconds"`
+}
+
+type BlockInfo struct {
+	BlockId            string `json:"block_id"`
+	TotalDifficulty    string `json:"total_difficulty"`
+	TxnAccumulatorInfo struct {
+		AccumulatorRoot    string   `json:"accumulator_root"`
+		FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
+		NumLeaves          uint64   `json:"num_leaves"`
+		NumNodes           uint64   `json:"num_nodes"`
+	} `json:"txn_accumulator_info"`
+	BlockAccumulatorInfo struct {
+		AccumulatorRoot    string   `json:"accumulator_root"`
+		FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
+		NumLeaves          uint64   `json:"num_leaves"`
+		NumNodes           uint64   `json:"num_nodes"`
+	} `json:"block_accumulator_info"`
 }
 
 func (info NodeInfo) GetBlockNumber() (uint64, error) {

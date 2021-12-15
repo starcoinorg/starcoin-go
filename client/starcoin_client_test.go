@@ -390,3 +390,14 @@ func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
 	fmt.Println(h2.BlockTimeTarget)
 	fmt.Println(h2.BlockDifficutyWindow)
 }
+
+func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {
+	client := NewStarcoinClient("https://halley-seed.starcoin.org")
+	h, err := client.GetBlockHeaderAndBlockInfoByNumber(context.Background(), 175991)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	j, _ := json.Marshal(h)
+	fmt.Println(string(j))
+}
