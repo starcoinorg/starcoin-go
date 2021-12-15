@@ -389,6 +389,7 @@ func TestHeaderWithDifficutyInfoByNumber(t *testing.T) {
 	fmt.Println(h2)
 	fmt.Println(h2.BlockTimeTarget)
 	fmt.Println(h2.BlockDifficutyWindow)
+	fmt.Println(h2.BlockInfo)
 }
 
 func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {
