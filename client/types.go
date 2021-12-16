@@ -541,13 +541,6 @@ type ChainInfo struct {
 	BlockInfo   BlockInfo   `json:"block_info"`
 }
 
-type AccumulatorInfo struct {
-	AccumulatorRoot    string   `json:"accumulator_root"`
-	FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
-	NumLeaves          int      `json:"num_leaves"`
-	NumNodes           int      `json:"num_nodes"`
-}
-
 type BlockInfo struct {
 	BlockId              string          `json:"block_id"`
 	TotalDifficulty      string          `json:"total_difficulty"`
