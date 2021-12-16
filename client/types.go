@@ -28,6 +28,13 @@ type BlockHeaderAndBlockInfo struct {
 	BlockInfo   BlockInfo   `json:"block_info"`
 }
 
+type AccumulatorInfo struct {
+	AccumulatorRoot    string   `json:"accumulator_root"`
+	FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
+	NumLeaves          uint64   `json:"num_leaves"`
+	NumNodes           uint64   `json:"num_nodes"`
+}
+
 type BlockHeader struct {
 	Timestamp            string  `json:"timestamp"`
 	Author               string  `json:"author"`
@@ -45,6 +52,50 @@ type BlockHeader struct {
 	ParentHash           string  `json:"parent_hash"`
 	StateRoot            string  `json:"state_root"`
 	TxnAccumulatorRoot   string  `json:"txn_accumulator_root"`
+}
+
+func (accumulator *AccumulatorInfo) ToTypesAccumulatorInfo() (*types.AccumulatorInfo, error) {
+	accumulatorRoot, err := hexToBytes(accumulator.AccumulatorRoot)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	subtreeRoots := make([]types.HashValue, 0)
+	for i := 0; i < len(accumulator.FrozenSubtreeRoots); i++ {
+		sub, err := hexToBytes(accumulator.FrozenSubtreeRoots[i])
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		subtreeRoots = append(subtreeRoots, sub)
+	}
+	return &types.AccumulatorInfo{
+		AccumulatorRoot:    accumulatorRoot,
+		FrozenSubtreeRoots: subtreeRoots,
+		NumLeaves:          accumulator.NumLeaves,
+		NumNodes:           accumulator.NumNodes,
+	}, nil
+}
+
+func (info *BlockInfo) ToTypesBlockInfo() (*types.BlockInfo, error) {
+	blockId, err := hexToBytes(info.BlockId)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	blockAccumulatorInfo, err := info.BlockAccumulatorInfo.ToTypesAccumulatorInfo()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	txnAccumulatorInfo, err := info.TxnAccumulatorInfo.ToTypesAccumulatorInfo()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	diff := types.ToBcsDifficulty(info.TotalDifficulty)
+
+	return &types.BlockInfo{
+		BlockId:              blockId,
+		BlockAccumulatorInfo: *blockAccumulatorInfo,
+		TotalDifficulty:      diff,
+		TxnAccumulatorInfo:   *txnAccumulatorInfo,
+	}, nil
 }
 
 func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
@@ -138,11 +189,6 @@ func (header *BlockHeader) Hash() ([]byte, error) {
 		return nil, errors.WithStack(err)
 	}
 	return *hash, nil
-	// bs, err := hash.BcsSerialize()
-	// if err != nil {
-	// 	return nil, errors.WithStack(err)
-	// }
-	// return bs, nil
 }
 
 type BlockMetadata struct {
@@ -507,20 +553,10 @@ type NodeInfo struct {
 }
 
 type BlockInfo struct {
-	BlockId            string `json:"block_id"`
-	TotalDifficulty    string `json:"total_difficulty"`
-	TxnAccumulatorInfo struct {
-		AccumulatorRoot    string   `json:"accumulator_root"`
-		FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
-		NumLeaves          uint64   `json:"num_leaves"`
-		NumNodes           uint64   `json:"num_nodes"`
-	} `json:"txn_accumulator_info"`
-	BlockAccumulatorInfo struct {
-		AccumulatorRoot    string   `json:"accumulator_root"`
-		FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
-		NumLeaves          uint64   `json:"num_leaves"`
-		NumNodes           uint64   `json:"num_nodes"`
-	} `json:"block_accumulator_info"`
+	BlockId              string          `json:"block_id"`
+	TotalDifficulty      string          `json:"total_difficulty"`
+	TxnAccumulatorInfo   AccumulatorInfo `json:"txn_accumulator_info"`
+	BlockAccumulatorInfo AccumulatorInfo `json:"block_accumulator_info"`
 }
 
 func (info NodeInfo) GetBlockNumber() (uint64, error) {
