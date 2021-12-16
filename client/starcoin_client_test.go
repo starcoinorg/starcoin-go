@@ -158,15 +158,18 @@ func TestSubmitTransaction(t *testing.T) {
 }
 
 func TestNodeInfo(t *testing.T) {
-	client := NewStarcoinClient("http://localhost:9850")
+	client := NewStarcoinClient("https://halley-seed.starcoin.org")
 	var result interface{}
 
 	result, err := client.GetNodeInfo(context.Background())
 	if err != nil {
 		t.Error(fmt.Sprintf("%+v", err))
 	}
-
-	fmt.Println(result)
+	j, err := json.Marshal(result)
+	if err != nil {
+		t.Error(fmt.Sprintf("%+v", err))
+	}
+	fmt.Println(string(j))
 }
 
 func TestSign(t *testing.T) {
