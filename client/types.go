@@ -237,14 +237,15 @@ type Ed25519 struct {
 }
 
 type TransactionInfo struct {
-	BlockHash        string `json:"block_hash"`
-	BlockNumber      string `json:"block_number"`
-	TransactionHash  string `json:"transaction_hash"`
-	TransactionIndex int    `json:"transaction_index"`
-	StateRootHash    string `json:"state_root_hash"`
-	EventRootHash    string `json:"event_root_hash"`
-	GasUsed          string `json:"gas_used"`
-	Status           string `json:"status"`
+	BlockHash              string `json:"block_hash"`
+	BlockNumber            string `json:"block_number"`
+	TransactionHash        string `json:"transaction_hash"`
+	TransactionIndex       int    `json:"transaction_index"`
+	TransactionGlobalIndex string `json:"transaction_global_index"`
+	StateRootHash          string `json:"state_root_hash"`
+	EventRootHash          string `json:"event_root_hash"`
+	GasUsed                string `json:"gas_used"`
+	Status                 string `json:"status"`
 }
 
 type Event struct {
