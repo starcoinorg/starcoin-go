@@ -62,6 +62,19 @@ func (node SparseMerkleInternalNode) CryptoHash() (*HashValue, error) {
 	return &result, nil
 }
 
+func (info TransactionInfo) CryptoHash() (*HashValue, error) {
+
+	headerBytes, err := info.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var result HashValue
+	result = Hash(PrefixHash("TransactionInfo"), headerBytes)
+
+	return &result, nil
+}
+
 func ToAccountAddress(addr string) (*AccountAddress, error) {
 	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
 	if err != nil {

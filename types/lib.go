@@ -6,6 +6,128 @@ import (
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 )
 
+type AbortLocation interface {
+	isAbortLocation()
+	Serialize(serializer serde.Serializer) error
+	BcsSerialize() ([]byte, error)
+}
+
+func DeserializeAbortLocation(deserializer serde.Deserializer) (AbortLocation, error) {
+	index, err := deserializer.DeserializeVariantIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	switch index {
+	case 0:
+		if val, err := load_AbortLocation__Module(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 1:
+		if val, err := load_AbortLocation__Script(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("Unknown variant index for AbortLocation: %d", index)
+	}
+}
+
+func BcsDeserializeAbortLocation(input []byte) (AbortLocation, error) {
+	if input == nil {
+		var obj AbortLocation
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeAbortLocation(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type AbortLocation__Module struct {
+	Value ModuleId
+}
+
+func (*AbortLocation__Module) isAbortLocation() {}
+
+func (obj *AbortLocation__Module) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(0)
+	if err := obj.Value.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *AbortLocation__Module) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_AbortLocation__Module(deserializer serde.Deserializer) (AbortLocation__Module, error) {
+	var obj AbortLocation__Module
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeModuleId(deserializer); err == nil {
+		obj.Value = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type AbortLocation__Script struct {
+}
+
+func (*AbortLocation__Script) isAbortLocation() {}
+
+func (obj *AbortLocation__Script) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(1)
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *AbortLocation__Script) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_AbortLocation__Script(deserializer serde.Deserializer) (AbortLocation__Script, error) {
+	var obj AbortLocation__Script
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
 type AccessPath struct {
 	Field0 AccountAddress
 	Field1 DataPath
@@ -1714,6 +1836,287 @@ func BcsDeserializeIdentifier(input []byte) (Identifier, error) {
 		return obj, fmt.Errorf("Some input bytes were not read")
 	}
 	return obj, err
+}
+
+type KeptVMStatus interface {
+	isKeptVMStatus()
+	Serialize(serializer serde.Serializer) error
+	BcsSerialize() ([]byte, error)
+}
+
+func DeserializeKeptVMStatus(deserializer serde.Deserializer) (KeptVMStatus, error) {
+	index, err := deserializer.DeserializeVariantIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	switch index {
+	case 0:
+		if val, err := load_KeptVMStatus__Executed(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 1:
+		if val, err := load_KeptVMStatus__OutOfGas(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 2:
+		if val, err := load_KeptVMStatus__MoveAbort(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 3:
+		if val, err := load_KeptVMStatus__ExecutionFailure(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	case 4:
+		if val, err := load_KeptVMStatus__MiscellaneousError(deserializer); err == nil {
+			return &val, nil
+		} else {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("Unknown variant index for KeptVMStatus: %d", index)
+	}
+}
+
+func BcsDeserializeKeptVMStatus(input []byte) (KeptVMStatus, error) {
+	if input == nil {
+		var obj KeptVMStatus
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeKeptVMStatus(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
+type KeptVMStatus__Executed struct {
+}
+
+func (*KeptVMStatus__Executed) isKeptVMStatus() {}
+
+func (obj *KeptVMStatus__Executed) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(0)
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *KeptVMStatus__Executed) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_KeptVMStatus__Executed(deserializer serde.Deserializer) (KeptVMStatus__Executed, error) {
+	var obj KeptVMStatus__Executed
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type KeptVMStatus__OutOfGas struct {
+}
+
+func (*KeptVMStatus__OutOfGas) isKeptVMStatus() {}
+
+func (obj *KeptVMStatus__OutOfGas) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(1)
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *KeptVMStatus__OutOfGas) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_KeptVMStatus__OutOfGas(deserializer serde.Deserializer) (KeptVMStatus__OutOfGas, error) {
+	var obj KeptVMStatus__OutOfGas
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type KeptVMStatus__MoveAbort struct {
+	Field0 AbortLocation
+	Field1 uint64
+}
+
+func (*KeptVMStatus__MoveAbort) isKeptVMStatus() {}
+
+func (obj *KeptVMStatus__MoveAbort) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(2)
+	if err := obj.Field0.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.Field1); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *KeptVMStatus__MoveAbort) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_KeptVMStatus__MoveAbort(deserializer serde.Deserializer) (KeptVMStatus__MoveAbort, error) {
+	var obj KeptVMStatus__MoveAbort
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeAbortLocation(deserializer); err == nil {
+		obj.Field0 = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.Field1 = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type KeptVMStatus__ExecutionFailure struct {
+	Location   AbortLocation
+	Function   uint16
+	CodeOffset uint16
+}
+
+func (*KeptVMStatus__ExecutionFailure) isKeptVMStatus() {}
+
+func (obj *KeptVMStatus__ExecutionFailure) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(3)
+	if err := obj.Location.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU16(obj.Function); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU16(obj.CodeOffset); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *KeptVMStatus__ExecutionFailure) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_KeptVMStatus__ExecutionFailure(deserializer serde.Deserializer) (KeptVMStatus__ExecutionFailure, error) {
+	var obj KeptVMStatus__ExecutionFailure
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeAbortLocation(deserializer); err == nil {
+		obj.Location = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU16(); err == nil {
+		obj.Function = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU16(); err == nil {
+		obj.CodeOffset = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+type KeptVMStatus__MiscellaneousError struct {
+}
+
+func (*KeptVMStatus__MiscellaneousError) isKeptVMStatus() {}
+
+func (obj *KeptVMStatus__MiscellaneousError) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	serializer.SerializeVariantIndex(4)
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *KeptVMStatus__MiscellaneousError) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func load_KeptVMStatus__MiscellaneousError(deserializer serde.Deserializer) (KeptVMStatus__MiscellaneousError, error) {
+	var obj KeptVMStatus__MiscellaneousError
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
 }
 
 type KeyRotationCapabilityResource struct {
@@ -3741,6 +4144,95 @@ func load_TransactionAuthenticator__MultiEd25519(deserializer serde.Deserializer
 	}
 	deserializer.DecreaseContainerDepth()
 	return obj, nil
+}
+
+type TransactionInfo struct {
+	TransactionHash HashValue
+	StateRootHash   HashValue
+	EventRootHash   HashValue
+	GasUsed         uint64
+	Status          KeptVMStatus
+}
+
+func (obj *TransactionInfo) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := obj.TransactionHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.StateRootHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := obj.EventRootHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(obj.GasUsed); err != nil {
+		return err
+	}
+	if err := obj.Status.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (obj *TransactionInfo) BcsSerialize() ([]byte, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := obj.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeTransactionInfo(deserializer serde.Deserializer) (TransactionInfo, error) {
+	var obj TransactionInfo
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.TransactionHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.StateRootHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.EventRootHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.GasUsed = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeKeptVMStatus(deserializer); err == nil {
+		obj.Status = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeTransactionInfo(input []byte) (TransactionInfo, error) {
+	if input == nil {
+		var obj TransactionInfo
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeTransactionInfo(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
 }
 
 type TransactionPayload interface {

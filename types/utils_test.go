@@ -63,3 +63,11 @@ func TestBlockInfo(t *testing.T) {
 	blockInfo, _ := BcsDeserializeBlockInfo(blockBytes)
 	assert.NotNil(t, blockInfo)
 }
+
+func TestTransactionInfo(t *testing.T) {
+	txnInfoBytes, _ := hex.DecodeString("20d328475d67b5e3b7fef2fc4c3fb694a8904ddf90d91de80796280f5187cc66f0204df4cb2116088fc2da8cfbc2c47175b54ef4a59c3784ddc5982eff4afe6f706c20081e3db4b09ac60312ec8deb66455b9cfc7aa4201582cfd896b0d3b24ab2a04d467b09000000000000")
+	txnInfo, _ := BcsDeserializeTransactionInfo(txnInfoBytes)
+	assert.NotNil(t, txnInfo)
+	txnInfoHash, _ := txnInfo.CryptoHash()
+	assert.Equal(t, "ffa4b4afdfa1c90dd202d9dbc7741a3dcd1e3879e664e5532962906fba59cf95", hex.EncodeToString(*txnInfoHash))
+}
