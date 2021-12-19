@@ -119,3 +119,15 @@ func TestBlockHeaderHash(t *testing.T) {
 	fmt.Println(bytesToHex(hdrHash2))
 	assert.Equal(t, bytesToHex(*hash), bytesToHex(hdrHash2))
 }
+
+func TestTransactionInfo(t *testing.T) {
+	txnJson := "{\"block_hash\":\"0x429e6ad8617937da569474a3eca407ec54dd458b4d854f6bd577d152d1428478\",\"block_number\":\"292517\",\"transaction_hash\":\"0xd328475d67b5e3b7fef2fc4c3fb694a8904ddf90d91de80796280f5187cc66f0\",\"transaction_index\":1,\"transaction_global_index\":\"324294\",\"state_root_hash\":\"0x4df4cb2116088fc2da8cfbc2c47175b54ef4a59c3784ddc5982eff4afe6f706c\",\"event_root_hash\":\"0x081e3db4b09ac60312ec8deb66455b9cfc7aa4201582cfd896b0d3b24ab2a04d\",\"gas_used\":\"621382\",\"status\":\"Executed\"}"
+	txn := TransactionInfo{}
+	json.Unmarshal([]byte(txnJson), &txn)
+	txnTypes, err := txn.ToTypesTransactionInfo()
+	if err != nil {
+		t.Error(err)
+	}
+	hash, _ := txnTypes.CryptoHash()
+	assert.Equal(t, "0xffa4b4afdfa1c90dd202d9dbc7741a3dcd1e3879e664e5532962906fba59cf95", bytesToHex(*hash))
+}

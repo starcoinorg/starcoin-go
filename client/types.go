@@ -98,6 +98,50 @@ func (info *BlockInfo) ToTypesBlockInfo() (*types.BlockInfo, error) {
 	}, nil
 }
 
+func (info *TransactionInfo) ToTypesTransactionInfo() (*types.TransactionInfo, error) {
+	txnHash, err := hexToBytes(info.TransactionHash)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	stateRootHash, err := hexToBytes(info.StateRootHash)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	eventRootHash, err := hexToBytes(info.EventRootHash)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	gasUsed, err := parseUint64(info.GasUsed)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	status, err := ToTypesKeptVMStatus(info.Status)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return &types.TransactionInfo{
+		TransactionHash: txnHash,
+		StateRootHash:   stateRootHash,
+		EventRootHash:   eventRootHash,
+		GasUsed:         gasUsed,
+		Status:          status,
+	}, nil
+}
+
+func ToTypesKeptVMStatus(status string) (types.KeptVMStatus, error) {
+	if len(status) < 1 {
+		return nil, fmt.Errorf("ToTypesKeptVMStatus status is null.")
+	}
+	if strings.EqualFold("Executed", status) {
+		return &types.KeptVMStatus__Executed{}, nil
+	}
+	if strings.EqualFold("OutOfGas", status) {
+		return &types.KeptVMStatus__OutOfGas{}, nil
+	}
+	//todo add other error parse
+	return &types.KeptVMStatus__MiscellaneousError{}, nil
+}
+
 func (header *BlockHeader) ToTypesHeader() (*types.BlockHeader, error) {
 	parentHash, err := hexToBytes(header.ParentHash)
 	if err != nil {
