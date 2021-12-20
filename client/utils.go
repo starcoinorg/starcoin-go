@@ -180,7 +180,7 @@ func EventToContractEventV0(ebs []byte) (*types.ContractEventV0, error) {
 		ev0 := evt.Value
 		return &ev0, nil
 	default:
-		return nil, err
+		return nil, fmt.Errorf("unknown event version")
 	}
 
 }
