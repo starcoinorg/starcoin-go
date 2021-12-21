@@ -341,7 +341,23 @@ func TestGetTransactionProof(t *testing.T) {
 	if err != nil {
 		t.FailNow()
 	}
-	fmt.Println(ev0.TypeTag)
+	//fmt.Println(ev0.Key)
+	fmt.Println("----------------- event TypeTag ------------------")
+	tts, err := getEventTypeTagString(ev0.TypeTag)
+	if err != nil { //|| s != "0xe498d62f5d1f469d2f72eb3e9dc8f230::CrossChainManager::CrossChainEvent" {
+		fmt.Println(err)
+		t.FailNow()
+	}
+	fmt.Println(tts)
+}
+
+func getEventTypeTagString(tt types.TypeTag) (string, error) {
+	switch tt := tt.(type) {
+	case *types.TypeTag__Struct:
+		return "0x" + hex.EncodeToString(tt.Value.Address[:]) + "::" + string(tt.Value.Module) + "::" + string(tt.Value.Name), nil
+	default:
+		return "", fmt.Errorf("unknown TypeTag type")
+	}
 }
 
 func TestHeaderByNumber(t *testing.T) {
