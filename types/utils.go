@@ -104,6 +104,32 @@ func CreateLiteralHash(word string) (*HashValue, error) {
 	return nil, fmt.Errorf("literal hash wrong length: %v", word)
 }
 
+func ToHashValue(hash string) (HashValue, error) {
+	hashByes, err := hex.DecodeString(strings.Replace(hash, "0x", "", 1))
+	if err != nil {
+		return nil, err
+	}
+	return HashValue(hashByes), nil
+}
+
+func ToHashValues(hashes []string) ([]HashValue, error) {
+	var result []HashValue
+	for i := 0; i < len(hashes); i++ {
+		hashByes, err := hex.DecodeString(strings.Replace(hashes[i], "0x", "", 1))
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, HashValue(hashByes))
+	}
+	return result, nil
+}
+
+func HashValueEqual(hash1, hash2 HashValue) bool {
+	hash1Bytes, _ := hash1.BcsSerialize()
+	hash2Bytes, _ := hash2.BcsSerialize()
+	return bytes.Equal(hash1Bytes, hash2Bytes)
+}
+
 func HashSha(data []byte) []byte {
 	concatData := bytes.Buffer{}
 	concatData.Write(data)
@@ -123,7 +149,7 @@ func PrefixHash(name string) []byte {
 	return Hash([]byte("STARCOIN::"), []byte(name))
 }
 
-func hex2Bytes(str string) []byte {
+func Hex2Bytes(str string) []byte {
 	if strings.HasPrefix(str, "0x") {
 		str = str[2:]
 	}
@@ -132,7 +158,7 @@ func hex2Bytes(str string) []byte {
 }
 
 func ToBcsDifficulty(source string) [32]uint8 {
-	z := new(uint256.Int).SetBytes(hex2Bytes(source))
+	z := new(uint256.Int).SetBytes(Hex2Bytes(source))
 	b := z.Bytes32()
 	var difficulty [32]uint8
 	copy(difficulty[:], b[:])
