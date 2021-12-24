@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -412,13 +413,33 @@ func TestHeaderWithDifficultyInfoByNumber(t *testing.T) {
 
 func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
-	h, err := client.GetBlockHeaderAndBlockInfoByNumber(context.Background(), 175991)
+	hdrAndInfo, err := client.GetBlockHeaderAndBlockInfoByNumber(context.Background(), 175991)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
-	j, _ := json.Marshal(h)
+	j, _ := json.Marshal(hdrAndInfo)
 	fmt.Println(string(j))
+
+	thdr, _ := hdrAndInfo.BlockHeader.ToTypesHeader()
+	tinfo, _ := hdrAndInfo.BlockInfo.ToTypesBlockInfo()
+	tHdrAndInfo := types.BlockHeaderAndBlockInfo{
+		BlockHeader: *thdr,
+		BlockInfo:   *tinfo,
+	}
+	//fmt.Println(tHdrAndInfo)
+	bs, _ := tHdrAndInfo.BcsSerialize()
+
+	tHdrAndInfo2, err := types.BcsDeserializeBlockHeaderAndBlockInfo(bs)
+	if err != nil {
+		t.FailNow()
+	}
+	//fmt.Println(tHdrAndInfo2)
+	bs2, _ := tHdrAndInfo2.BcsSerialize()
+
+	if !bytes.Equal(bs, bs2) {
+		t.FailNow()
+	}
 }
 
 func TestGetBlockInfoByNumber(t *testing.T) {
