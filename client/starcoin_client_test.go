@@ -420,3 +420,14 @@ func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {
 	j, _ := json.Marshal(h)
 	fmt.Println(string(j))
 }
+
+func TestGetBlockInfoByNumber(t *testing.T) {
+	client := NewStarcoinClient("https://halley-seed.starcoin.org")
+	h, err := client.GetBlockInfoByNumber(context.Background(), 175991)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	j, _ := json.Marshal(h)
+	fmt.Println(string(j))
+}
