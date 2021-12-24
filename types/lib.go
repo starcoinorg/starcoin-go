@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/bcs"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 )
@@ -595,7 +596,7 @@ func BcsDeserializeAuthenticationKey(input []byte) (AuthenticationKey, error) {
 }
 
 type BlockInfo struct {
-	BlockId              HashValue
+	BlockHash            HashValue
 	TotalDifficulty      [32]uint8
 	TxnAccumulatorInfo   AccumulatorInfo
 	BlockAccumulatorInfo AccumulatorInfo
@@ -605,7 +606,7 @@ func (obj *BlockInfo) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := obj.BlockId.Serialize(serializer); err != nil {
+	if err := obj.BlockHash.Serialize(serializer); err != nil {
 		return err
 	}
 	if err := serialize_array32_u8_array(obj.TotalDifficulty, serializer); err != nil {
@@ -638,7 +639,7 @@ func DeserializeBlockInfo(deserializer serde.Deserializer) (BlockInfo, error) {
 		return obj, err
 	}
 	if val, err := DeserializeHashValue(deserializer); err == nil {
-		obj.BlockId = val
+		obj.BlockHash = val
 	} else {
 		return obj, err
 	}

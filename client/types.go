@@ -31,8 +31,8 @@ type BlockHeaderAndBlockInfo struct {
 type AccumulatorInfo struct {
 	AccumulatorRoot    string   `json:"accumulator_root"`
 	FrozenSubtreeRoots []string `json:"frozen_subtree_roots"`
-	NumLeaves          uint64   `json:"num_leaves"`
-	NumNodes           uint64   `json:"num_nodes"`
+	NumLeaves          string   `json:"num_leaves"`
+	NumNodes           string   `json:"num_nodes"`
 }
 
 type BlockHeader struct {
@@ -67,16 +67,24 @@ func (accumulator *AccumulatorInfo) ToTypesAccumulatorInfo() (*types.Accumulator
 		}
 		subtreeRoots = append(subtreeRoots, sub)
 	}
+	nl, err := parseUint64(accumulator.NumLeaves)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	nn, err := parseUint64(accumulator.NumNodes)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
 	return &types.AccumulatorInfo{
 		AccumulatorRoot:    accumulatorRoot,
 		FrozenSubtreeRoots: subtreeRoots,
-		NumLeaves:          accumulator.NumLeaves,
-		NumNodes:           accumulator.NumNodes,
+		NumLeaves:          nl,
+		NumNodes:           nn,
 	}, nil
 }
 
 func (info *BlockInfo) ToTypesBlockInfo() (*types.BlockInfo, error) {
-	blockId, err := hexToBytes(info.BlockId)
+	blockHash, err := hexToBytes(info.BlockHash)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -91,7 +99,7 @@ func (info *BlockInfo) ToTypesBlockInfo() (*types.BlockInfo, error) {
 	diff := types.ToBcsDifficulty(info.TotalDifficulty)
 
 	return &types.BlockInfo{
-		BlockId:              blockId,
+		BlockHash:            blockHash,
 		BlockAccumulatorInfo: *blockAccumulatorInfo,
 		TotalDifficulty:      diff,
 		TxnAccumulatorInfo:   *txnAccumulatorInfo,
@@ -587,7 +595,7 @@ type ChainInfo struct {
 }
 
 type BlockInfo struct {
-	BlockId              string          `json:"block_id"`
+	BlockHash            string          `json:"block_hash"`
 	TotalDifficulty      string          `json:"total_difficulty"`
 	TxnAccumulatorInfo   AccumulatorInfo `json:"txn_accumulator_info"`
 	BlockAccumulatorInfo AccumulatorInfo `json:"block_accumulator_info"`
