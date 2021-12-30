@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/big"
-
+	"reflect"
 	"testing"
 )
 
@@ -70,4 +70,33 @@ func TestTransactionInfo(t *testing.T) {
 	assert.NotNil(t, txnInfo)
 	txnInfoHash, _ := txnInfo.CryptoHash()
 	assert.Equal(t, "ffa4b4afdfa1c90dd202d9dbc7741a3dcd1e3879e664e5532962906fba59cf95", hex.EncodeToString(*txnInfoHash))
+}
+
+func TestBlockHeader_ToHeaderBlob(t *testing.T) {
+	wants, _ := hex.DecodeString("76aac8bcbcf8eb4321afa17aea041e09e792f0ed800350cc5e4e34963aa57f9a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000100")
+	tests := []struct {
+		name    string
+		want    []byte
+		wantErr bool
+	}{
+		{
+			name:    "test block header blob",
+			want:    wants,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blockBytes, _ := hex.DecodeString("207184cdee7929953d36393f1d2f1fd355f0fde1b90cb00e99a223c4661e77bc8f94b4e64a7d0100004c0a0100000000006c73f098dee9b71f14869ce32bcec830002090b76fa4ff1ef2d3bac35413f1ebee2f91318471d72bf93236648a15cb109af520761c7bea0f2d666756ae5a3e8327c9b0df88e205dafbfc8776d3f4b9b7cab11b20c7a7d6546297453775bb79c99cabd08b8f7ffd80d513057a40f3a2a42008be340000000000000000000000000000000000000000000000000000000000000000000000000000010020c01e0329de6d899348a8ef4bd51db56175b3fa0988e57c3dcec8eaf13a164d97fd3878376d00000000")
+			blockHeader, _ := BcsDeserializeBlockHeader(blockBytes)
+			got, err := blockHeader.ToHeaderBlob()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ToHeaderBlob() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ToHeaderBlob() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

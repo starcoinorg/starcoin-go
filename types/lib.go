@@ -692,62 +692,62 @@ type BlockHeader struct {
 	Extra                BlockHeaderExtra
 }
 
-func (obj *BlockHeader) Serialize(serializer serde.Serializer) error {
+func (header *BlockHeader) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := obj.ParentHash.Serialize(serializer); err != nil {
+	if err := header.ParentHash.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := serializer.SerializeU64(obj.Timestamp); err != nil {
+	if err := serializer.SerializeU64(header.Timestamp); err != nil {
 		return err
 	}
-	if err := serializer.SerializeU64(obj.Number); err != nil {
+	if err := serializer.SerializeU64(header.Number); err != nil {
 		return err
 	}
-	if err := obj.Author.Serialize(serializer); err != nil {
+	if err := header.Author.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := serialize_option_AuthenticationKey(obj.AuthorAuthKey, serializer); err != nil {
+	if err := serialize_option_AuthenticationKey(header.AuthorAuthKey, serializer); err != nil {
 		return err
 	}
-	if err := obj.TxnAccumulatorRoot.Serialize(serializer); err != nil {
+	if err := header.TxnAccumulatorRoot.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.BlockAccumulatorRoot.Serialize(serializer); err != nil {
+	if err := header.BlockAccumulatorRoot.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.StateRoot.Serialize(serializer); err != nil {
+	if err := header.StateRoot.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := serializer.SerializeU64(obj.GasUsed); err != nil {
+	if err := serializer.SerializeU64(header.GasUsed); err != nil {
 		return err
 	}
-	if err := serialize_array32_u8_array(obj.Difficulty, serializer); err != nil {
+	if err := serialize_array32_u8_array(header.Difficulty, serializer); err != nil {
 		return err
 	}
-	if err := obj.BodyHash.Serialize(serializer); err != nil {
+	if err := header.BodyHash.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.ChainId.Serialize(serializer); err != nil {
+	if err := header.ChainId.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := serializer.SerializeU32(obj.Nonce); err != nil {
+	if err := serializer.SerializeU32(header.Nonce); err != nil {
 		return err
 	}
-	if err := obj.Extra.Serialize(serializer); err != nil {
+	if err := header.Extra.Serialize(serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *BlockHeader) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (header *BlockHeader) BcsSerialize() ([]byte, error) {
+	if header == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := header.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
@@ -1110,24 +1110,24 @@ type ContractEvent__V0 struct {
 
 func (*ContractEvent__V0) isContractEvent() {}
 
-func (obj *ContractEvent__V0) Serialize(serializer serde.Serializer) error {
+func (event *ContractEvent__V0) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
 	serializer.SerializeVariantIndex(0)
-	if err := obj.Value.Serialize(serializer); err != nil {
+	if err := event.Value.Serialize(serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *ContractEvent__V0) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (event *ContractEvent__V0) BcsSerialize() ([]byte, error) {
+	if event == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := event.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
@@ -2512,6 +2512,158 @@ func BcsDeserializePackage(input []byte) (Package, error) {
 	return obj, err
 }
 
+type RawBlockHeader struct {
+	ParentHash                 HashValue
+	Timestamp                  uint64
+	Number                     uint64
+	Author                     AccountAddress
+	AuthorAuthKey              *AuthenticationKey
+	AccumulatorRoot            HashValue
+	ParentBlockAccumulatorRoot HashValue
+	StateRoot                  HashValue
+	GasUsed                    uint64
+	Difficulty                 [32]uint8
+	BodyHash                   HashValue
+	ChainId                    ChainId
+}
+
+func (header *RawBlockHeader) Serialize(serializer serde.Serializer) error {
+	if err := serializer.IncreaseContainerDepth(); err != nil {
+		return err
+	}
+	if err := header.ParentHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(header.Timestamp); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(header.Number); err != nil {
+		return err
+	}
+	if err := header.Author.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serialize_option_AuthenticationKey(header.AuthorAuthKey, serializer); err != nil {
+		return err
+	}
+	if err := header.AccumulatorRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := header.ParentBlockAccumulatorRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := header.StateRoot.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := serializer.SerializeU64(header.GasUsed); err != nil {
+		return err
+	}
+	if err := serialize_array32_u8_array(header.Difficulty, serializer); err != nil {
+		return err
+	}
+	if err := header.BodyHash.Serialize(serializer); err != nil {
+		return err
+	}
+	if err := header.ChainId.Serialize(serializer); err != nil {
+		return err
+	}
+	serializer.DecreaseContainerDepth()
+	return nil
+}
+
+func (header *RawBlockHeader) BcsSerialize() ([]byte, error) {
+	if header == nil {
+		return nil, fmt.Errorf("Cannot serialize null object")
+	}
+	serializer := bcs.NewSerializer()
+	if err := header.Serialize(serializer); err != nil {
+		return nil, err
+	}
+	return serializer.GetBytes(), nil
+}
+
+func DeserializeRawBlockHeader(deserializer serde.Deserializer) (RawBlockHeader, error) {
+	var obj RawBlockHeader
+	if err := deserializer.IncreaseContainerDepth(); err != nil {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.ParentHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.Timestamp = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.Number = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeAccountAddress(deserializer); err == nil {
+		obj.Author = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_option_AuthenticationKey(deserializer); err == nil {
+		obj.AuthorAuthKey = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.AccumulatorRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.ParentBlockAccumulatorRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.StateRoot = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserializer.DeserializeU64(); err == nil {
+		obj.GasUsed = val
+	} else {
+		return obj, err
+	}
+	if val, err := deserialize_array32_u8_array(deserializer); err == nil {
+		obj.Difficulty = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeHashValue(deserializer); err == nil {
+		obj.BodyHash = val
+	} else {
+		return obj, err
+	}
+	if val, err := DeserializeChainId(deserializer); err == nil {
+		obj.ChainId = val
+	} else {
+		return obj, err
+	}
+	deserializer.DecreaseContainerDepth()
+	return obj, nil
+}
+
+func BcsDeserializeRawBlockHeader(input []byte) (RawBlockHeader, error) {
+	if input == nil {
+		var obj RawBlockHeader
+		return obj, fmt.Errorf("Cannot deserialize null array")
+	}
+	deserializer := bcs.NewDeserializer(input)
+	obj, err := DeserializeRawBlockHeader(deserializer)
+	if err == nil && deserializer.GetBufferOffset() < uint64(len(input)) {
+		return obj, fmt.Errorf("Some input bytes were not read")
+	}
+	return obj, err
+}
+
 type RawUserTransaction struct {
 	Sender                  AccountAddress
 	SequenceNumber          uint64
@@ -3197,26 +3349,26 @@ type SparseMerkleInternalNode struct {
 	RightChild HashValue
 }
 
-func (obj *SparseMerkleInternalNode) Serialize(serializer serde.Serializer) error {
+func (node *SparseMerkleInternalNode) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := obj.LeftChild.Serialize(serializer); err != nil {
+	if err := node.LeftChild.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.RightChild.Serialize(serializer); err != nil {
+	if err := node.RightChild.Serialize(serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *SparseMerkleInternalNode) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (node *SparseMerkleInternalNode) BcsSerialize() ([]byte, error) {
+	if node == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := node.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
@@ -3259,26 +3411,26 @@ type SparseMerkleLeafNode struct {
 	ValueHash HashValue
 }
 
-func (obj *SparseMerkleLeafNode) Serialize(serializer serde.Serializer) error {
+func (node *SparseMerkleLeafNode) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := obj.Key.Serialize(serializer); err != nil {
+	if err := node.Key.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.ValueHash.Serialize(serializer); err != nil {
+	if err := node.ValueHash.Serialize(serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *SparseMerkleLeafNode) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (node *SparseMerkleLeafNode) BcsSerialize() ([]byte, error) {
+	if node == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := node.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
@@ -4155,35 +4307,35 @@ type TransactionInfo struct {
 	Status          KeptVMStatus
 }
 
-func (obj *TransactionInfo) Serialize(serializer serde.Serializer) error {
+func (info *TransactionInfo) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := obj.TransactionHash.Serialize(serializer); err != nil {
+	if err := info.TransactionHash.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.StateRootHash.Serialize(serializer); err != nil {
+	if err := info.StateRootHash.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := obj.EventRootHash.Serialize(serializer); err != nil {
+	if err := info.EventRootHash.Serialize(serializer); err != nil {
 		return err
 	}
-	if err := serializer.SerializeU64(obj.GasUsed); err != nil {
+	if err := serializer.SerializeU64(info.GasUsed); err != nil {
 		return err
 	}
-	if err := obj.Status.Serialize(serializer); err != nil {
+	if err := info.Status.Serialize(serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *TransactionInfo) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (info *TransactionInfo) BcsSerialize() ([]byte, error) {
+	if info == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := info.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
