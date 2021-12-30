@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/starcoinorg/starcoin-go/core"
 	"math/big"
 	"strings"
 
@@ -20,6 +21,50 @@ func (header BlockHeader) GetHash() (*HashValue, error) {
 
 	var result HashValue
 	result = Hash(PrefixHash("BlockHeader"), headerBytes)
+
+	return &result, nil
+}
+
+func (header BlockHeader) ToRawBlockHeader() RawBlockHeader {
+	return RawBlockHeader{
+		ParentHash:                 header.ParentHash,
+		Timestamp:                  header.Timestamp,
+		Number:                     header.Number,
+		Author:                     header.Author,
+		AuthorAuthKey:              header.AuthorAuthKey,
+		AccumulatorRoot:            header.TxnAccumulatorRoot,
+		ParentBlockAccumulatorRoot: header.BlockAccumulatorRoot,
+		StateRoot:                  header.StateRoot,
+		GasUsed:                    header.GasUsed,
+		Difficulty:                 header.Difficulty,
+		BodyHash:                   header.BodyHash,
+		ChainId:                    header.ChainId,
+	}
+}
+
+func (header BlockHeader) ToHeaderBlob() ([]byte, error) {
+	hash, err := header.ToRawBlockHeader().CryptoHash()
+	if err != nil {
+		return nil, err
+	}
+	diffBytes := make([]byte, 32)
+	copy(diffBytes[:], header.Difficulty[:])
+	extendAndNonce := make([]byte, 12)
+	data := bytes.Buffer{}
+	data.Write(*hash)
+	data.Write(extendAndNonce)
+	data.Write(diffBytes)
+	return data.Bytes(), nil
+}
+
+func (header RawBlockHeader) CryptoHash() (*HashValue, error) {
+	headerBytes, err := header.BcsSerialize()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var result HashValue
+	result = Hash(PrefixHash("RawBlockHeader"), headerBytes)
 
 	return &result, nil
 }
@@ -149,22 +194,14 @@ func PrefixHash(name string) []byte {
 	return Hash([]byte("STARCOIN::"), []byte(name))
 }
 
-func Hex2Bytes(str string) []byte {
-	if strings.HasPrefix(str, "0x") {
-		str = str[2:]
-	}
-	h, _ := hex.DecodeString(str)
-	return h
-}
-
 func ToBcsDifficulty(source string) [32]uint8 {
-	z := new(uint256.Int).SetBytes(Hex2Bytes(source))
+	z := new(uint256.Int).SetBytes(core.Hex2Bytes(source))
 	b := z.Bytes32()
 	var difficulty [32]uint8
 	copy(difficulty[:], b[:])
 	return difficulty
 }
 
-func (header BlockHeader) GetDiffculty() *big.Int {
+func (header BlockHeader) GetDifficulty() *big.Int {
 	return new(big.Int).SetBytes(header.Difficulty[:])
 }

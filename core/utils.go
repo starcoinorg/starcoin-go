@@ -1,10 +1,19 @@
 package core
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
+func Hex2Bytes(str string) []byte {
+	if strings.HasPrefix(str, "0x") {
+		str = str[2:]
+	}
+	h, _ := hex.DecodeString(str)
+	return h
+}
 func Bytes2Bits(data []byte) []int {
 	dst := make([]int, 0)
 	for _, v := range data {
