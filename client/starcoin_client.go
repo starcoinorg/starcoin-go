@@ -172,6 +172,9 @@ func (this *StarcoinClient) GetBlockHeaderAndBlockInfoByNumber(context context.C
 	if err != nil {
 		return nil, err
 	}
+	if err = assertBlockHeaderAndBlockInfo(hdr, bi); err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("assertBlockHeaderAndBlockInfo error on height: %d", number))
+	}
 	return &BlockHeaderAndBlockInfo{
 		BlockHeader: *hdr,
 		BlockInfo:   *bi,
@@ -193,7 +196,9 @@ func (this *StarcoinClient) HeaderWithDifficultyInfoByNumber(context context.Con
 	if err != nil {
 		return nil, errors.Wrap(err, "call method GetBlockInfoByNumber ")
 	}
-
+	if err = assertBlockHeaderAndBlockInfo(h, blockInfo); err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("assertBlockHeaderAndBlockInfo on height: %d", number))
+	}
 	hd := BlockHeaderWithDifficultyInfo{
 		BlockHeader:          *h,
 		BlockTimeTarget:      epoch.Json.BlockTimeTarget,
@@ -201,6 +206,13 @@ func (this *StarcoinClient) HeaderWithDifficultyInfoByNumber(context context.Con
 		BlockInfo:            *blockInfo,
 	}
 	return &hd, nil
+}
+
+func assertBlockHeaderAndBlockInfo(header *BlockHeader, blockInfo *BlockInfo) error {
+	if header.BlockHash != blockInfo.BlockHash {
+		return fmt.Errorf("header.BlockHash(%s) != blockInfo.BlockHash(%s)", header.BlockHash, blockInfo.BlockHash)
+	}
+	return nil
 }
 
 func (this *StarcoinClient) HeaderByNumber(context context.Context, number uint64) (*BlockHeader, error) {

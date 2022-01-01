@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
 	"github.com/starcoinorg/starcoin-go/types"
 
@@ -439,6 +440,25 @@ func TestGetBlockHeaderAndBlockInfoByNumber(t *testing.T) {
 
 	if !bytes.Equal(bs, bs2) {
 		t.FailNow()
+	}
+
+	fmt.Println("-------------- difficulty info. ---------------")
+	difficulty := new(uint256.Int).SetBytes(thdr.Difficulty[:])
+	totalDifficulty := new(uint256.Int).SetBytes(tinfo.TotalDifficulty[:])
+	parent, err := client.GetBlockHeaderAndBlockInfoByNumber(context.Background(), thdr.Number-1)
+	if err != nil {
+		t.FailNow()
+	}
+	ptinfo, err := parent.BlockInfo.ToTypesBlockInfo()
+	if err != nil {
+		t.FailNow()
+	}
+	parentTotalDifficulty := new(uint256.Int).SetBytes(ptinfo.TotalDifficulty[:])
+	fmt.Printf("difficulty: %d, totalDifficulty: %d, parentTotalDifficulty: %d\n", difficulty, totalDifficulty, parentTotalDifficulty)
+	if totalDifficulty.Cmp(new(uint256.Int).Add(parentTotalDifficulty, difficulty)) != 0 {
+		t.FailNow()
+	} else {
+		//fmt.Println("ok")
 	}
 }
 
