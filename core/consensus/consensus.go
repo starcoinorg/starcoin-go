@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
 	"github.com/holiman/uint256"
 	"github.com/starcoinorg/starcoin-go/core/cryptonight"
 )
 
 func VerifyHeaderDifficulty(difficulty uint256.Int, headerDifficulty uint256.Int, headerBlob []byte, nonce uint32, extra []byte) (bool, error) {
 	if difficulty != headerDifficulty {
-		return false, fmt.Errorf("verify header difficulty failure,difficulty: %v, headerDifficulty: %v", difficulty, headerDifficulty)
+		return false, fmt.Errorf("verify header difficulty failure, difficulty: %v, headerDifficulty: %v", difficulty, headerDifficulty)
 	}
 	//calculate_pow_hash
 	powHash, err := CalculatePowHash(headerBlob, nonce, extra)
