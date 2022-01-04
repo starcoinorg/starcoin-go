@@ -393,7 +393,7 @@ func TestGetEpochResource(t *testing.T) {
 
 func TestHeaderWithDifficultyInfoByNumber(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
-	h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 175991)
+	h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 535440)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -478,8 +478,8 @@ func TestGetBlockInfoByNumber(t *testing.T) {
 
 func TestVerifyHeaderDifficulty(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
-	h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 535439) // PASS!
-	//h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 535440) // Failed!
+	//h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 535439) // PASS!
+	h, err := client.HeaderWithDifficultyInfoByNumber(context.Background(), 535440) // Epoch changed!
 	if err != nil {
 		t.FailNow()
 	}

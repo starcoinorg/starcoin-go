@@ -186,7 +186,12 @@ func (this *StarcoinClient) HeaderWithDifficultyInfoByNumber(context context.Con
 	if err != nil {
 		return nil, errors.Wrap(err, "call method HeaderByNumber ")
 	}
-	stateroot := h.StateRoot
+	// /////////// Get Parent's StateRoot ///////////
+	parent, err := this.GetBlockByHash(context, h.ParentHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "call method GetBlockByHash ")
+	}
+	stateroot := parent.BlockHeader.StateRoot //h.StateRoot
 	epoch, err := this.GetEpochResource(context, &stateroot)
 	if err != nil {
 		return nil, errors.Wrap(err, "call method GetEpochResource ")
