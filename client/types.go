@@ -123,7 +123,7 @@ func (info *TransactionInfo) ToTypesTransactionInfo() (*types.TransactionInfo, e
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	status, err := ToTypesKeptVMStatus(info.Status)
+	status, err := ToTypesKeptVMStatus(string(info.Status))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -140,10 +140,10 @@ func ToTypesKeptVMStatus(status string) (types.KeptVMStatus, error) {
 	if len(status) < 1 {
 		return nil, fmt.Errorf("ToTypesKeptVMStatus status is null.")
 	}
-	if strings.EqualFold("Executed", status) {
+	if strings.EqualFold("\"Executed\"", status) {
 		return &types.KeptVMStatus__Executed{}, nil
 	}
-	if strings.EqualFold("OutOfGas", status) {
+	if strings.EqualFold("\"OutOfGas\"", status) {
 		return &types.KeptVMStatus__OutOfGas{}, nil
 	}
 	//todo add other error parse
@@ -289,15 +289,15 @@ type Ed25519 struct {
 }
 
 type TransactionInfo struct {
-	BlockHash              string `json:"block_hash"`
-	BlockNumber            string `json:"block_number"`
-	TransactionHash        string `json:"transaction_hash"`
-	TransactionIndex       int    `json:"transaction_index"`
-	TransactionGlobalIndex string `json:"transaction_global_index"`
-	StateRootHash          string `json:"state_root_hash"`
-	EventRootHash          string `json:"event_root_hash"`
-	GasUsed                string `json:"gas_used"`
-	Status                 string `json:"status"`
+	BlockHash              string          `json:"block_hash"`
+	BlockNumber            string          `json:"block_number"`
+	TransactionHash        string          `json:"transaction_hash"`
+	TransactionIndex       int             `json:"transaction_index"`
+	TransactionGlobalIndex string          `json:"transaction_global_index"`
+	StateRootHash          string          `json:"state_root_hash"`
+	EventRootHash          string          `json:"event_root_hash"`
+	GasUsed                string          `json:"gas_used"`
+	Status                 json.RawMessage `json:"status"`
 }
 
 type Event struct {

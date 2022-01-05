@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -474,6 +475,17 @@ func TestGetBlockInfoByNumber(t *testing.T) {
 	}
 	j, _ := json.Marshal(h)
 	fmt.Println(string(j))
+}
+
+func TestGetTransactionInfoByHash(t *testing.T) {
+	stcclient := NewStarcoinClient("https://halley-seed.starcoin.org")
+	txInfo, err := stcclient.GetTransactionInfoByHash(context.Background(), "0xb199fbbf9c7aeef9a0257f0d496ecd0f11ded014526965b4a294c66041272cae")
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+	fmt.Println(strings.EqualFold("\"Executed\"", string(txInfo.Status)))
+	fmt.Println(string(txInfo.Status))
 }
 
 func TestVerifyHeaderDifficulty(t *testing.T) {
