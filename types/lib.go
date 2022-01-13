@@ -546,23 +546,23 @@ func BcsDeserializeArgumentABI(input []byte) (ArgumentABI, error) {
 
 type AuthenticationKey []byte
 
-func (obj *AuthenticationKey) Serialize(serializer serde.Serializer) error {
+func (key *AuthenticationKey) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serializer.SerializeBytes(([]byte)(*obj)); err != nil {
+	if err := serializer.SerializeBytes(([]byte)(*key)); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *AuthenticationKey) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (key *AuthenticationKey) BcsSerialize() ([]byte, error) {
+	if key == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := key.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
@@ -3295,23 +3295,23 @@ func BcsDeserializeSignedUserTransaction(input []byte) (SignedUserTransaction, e
 
 type SigningMessage []uint8
 
-func (obj *SigningMessage) Serialize(serializer serde.Serializer) error {
+func (message *SigningMessage) Serialize(serializer serde.Serializer) error {
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
-	if err := serialize_vector_u8(([]uint8)(*obj), serializer); err != nil {
+	if err := serialize_vector_u8(([]uint8)(*message), serializer); err != nil {
 		return err
 	}
 	serializer.DecreaseContainerDepth()
 	return nil
 }
 
-func (obj *SigningMessage) BcsSerialize() ([]byte, error) {
-	if obj == nil {
+func (message *SigningMessage) BcsSerialize() ([]byte, error) {
+	if message == nil {
 		return nil, fmt.Errorf("Cannot serialize null object")
 	}
 	serializer := bcs.NewSerializer()
-	if err := obj.Serialize(serializer); err != nil {
+	if err := message.Serialize(serializer); err != nil {
 		return nil, err
 	}
 	return serializer.GetBytes(), nil
