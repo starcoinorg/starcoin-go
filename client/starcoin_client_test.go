@@ -280,28 +280,34 @@ func TestDryRunRaw(t *testing.T) {
 }
 
 func TestEstimateGas(t *testing.T) {
-	client := NewStarcoinClient("http://localhost:9850")
+	//client := NewStarcoinClient("http://localhost:9850")
+	//chainId := 254 //local dev chainId
+	client := NewStarcoinClient("https://barnard-seed.starcoin.org")
+	chainId := 251 // barnard chainId
 	context := context.Background()
 
 	sender := "0x569ab535990a17ac9afd1bc57faec683"
-	senderPk, _ := HexStringToBytes("0xe4cb4052dc3398f3794918f5650fdefb0a5272c4d51220fbf9538ca2c379b00b")
+	senderPubKey, _ := HexStringToBytes("0xe4cb4052dc3398f3794918f5650fdefb0a5272c4d51220fbf9538ca2c379b00b")
 	receiver := "0x17d882a26d86ccb0eedae1bd3db4f47c"
+	_ = senderPubKey
 
 	price, err := client.GetGasUnitPrice(context)
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
 
-	//state, err := client.GetState(context, sender)
-	seqNumber, err := client.GetAccountSequenceNumber(context, sender)
+	// seqNumber, err := client.GetAccountSequenceNumber(context, sender)
+	// fmt.Printf("current account seqNumber: %d\n", seqNumber)
+	// _ = seqNumber
+	// //seqNumber = 1 //note: if seqNumber is incorrent, dry run will fail.
+	// if err != nil {
+	// 	t.Errorf("%+v", err)
+	// }
 
-	if err != nil {
-		t.Errorf("%+v", err)
-	}
-
-	chainId := 254
-	result, err := client.EstimateGas(context, chainId, price, DEFAULT_MAX_GAS_AMOUNT, sender, senderPk, seqNumber,
-		"0x01::TransferScripts::peer_to_peer_v2", []string{"0x01::STC::STC"}, []string{receiver, "1u128"})
+	code := "0x01::TransferScripts::peer_to_peer_v2"
+	typeArgs := []string{"0x01::STC::STC"}
+	args := []string{receiver, "1u128"}
+	result, err := client.EstimateGas(context, chainId, price, DEFAULT_MAX_GAS_AMOUNT, sender, senderPubKey, nil, code, typeArgs, args)
 	if err != nil {
 		t.Errorf("%+v", err)
 	}

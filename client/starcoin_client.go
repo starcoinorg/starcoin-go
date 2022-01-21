@@ -582,7 +582,7 @@ func (this *StarcoinClient) DryRunRaw(context context.Context, txn types.RawUser
 }
 
 func (this *StarcoinClient) EstimateGas(context context.Context, chainId int, gasUnitPrice int, maxGasAmount uint64,
-	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber uint64,
+	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber *uint64,
 	code string, typeArgs []string, args []string) (*big.Int, error) {
 	result, err := this.DryRun(context, chainId, gasUnitPrice, maxGasAmount, senderAddress, publicKey, accountSeqNumber, code, typeArgs, args)
 	if err != nil {
@@ -601,7 +601,7 @@ func extractGasUsed(result *DryRunResult) (*big.Int, error) {
 }
 
 func (this *StarcoinClient) DryRun(context context.Context, chainId int, gasUnitPrice int, maxGasAmount uint64,
-	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber uint64,
+	senderAddress string, publicKey types.Ed25519PublicKey, accountSeqNumber *uint64,
 	code string, typeArgs []string, args []string) (*DryRunResult, error) {
 	var result DryRunResult
 	dryRunParam := DryRunParam{
