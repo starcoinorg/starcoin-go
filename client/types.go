@@ -338,7 +338,7 @@ type DryRunParam struct {
 	GasUnitPrice    int               `json:"gas_unit_price"`
 	Sender          string            `json:"sender"`
 	SenderPublicKey string            `json:"sender_public_key"`
-	SequenceNumber  uint64            `json:"sequence_number"`
+	SequenceNumber  *uint64           `json:"sequence_number,omitempty"`
 	MaxGasAmount    uint64            `json:"max_gas_amount"`
 	Script          DryRunParamScript `json:"script"`
 }
