@@ -13,6 +13,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+const (
+	Ed25519Key              byte = 0
+	MultiEd25519Key         byte = 1
+	AccountAddressLength         = 16
+	AuthenticationKeyLength      = 32
+)
+
 func (header BlockHeader) GetHash() (*HashValue, error) {
 	headerBytes, err := header.BcsSerialize()
 	if err != nil {
@@ -120,6 +127,49 @@ func (info TransactionInfo) CryptoHash() (*HashValue, error) {
 	return &result, nil
 }
 
+func (message SigningMessage) HashBytes() []byte {
+	return HashSha(PrefixHash("SigningMessage"))
+}
+
+func AccountAddressValueOf(b []byte) (AccountAddress, error) {
+	var address AccountAddress
+	if len(b) != AccountAddressLength {
+		return address, fmt.Errorf("account address length err: %v", len(b))
+	}
+	var addr [16]uint8
+	for i := 0; i < 16; i++ {
+		addr[i] = b[i]
+	}
+	return addr, nil
+}
+
+func (key *AuthenticationKey) DerivedAddress() (AccountAddress, error) {
+	var address AccountAddress
+	keyBytes := ([]byte)(*key)
+	if len(keyBytes) != AuthenticationKeyLength {
+		return address, fmt.Errorf("AuthenticationKey length err: %v", len(keyBytes))
+	}
+	// keep only last 16 bytes
+	slice := ([]byte)(*key)[AccountAddressLength:]
+	return AccountAddressValueOf(slice)
+}
+
+func AuthKey(transactionAuthenticator TransactionAuthenticator) AuthenticationKey {
+	imageByte := preimage(transactionAuthenticator)
+	hash := sha3.New256()
+	hash.Write(imageByte)
+	return hash.Sum(nil)
+}
+
+func preimage(authenticator TransactionAuthenticator) []byte {
+	if core.IsInstanceOf(authenticator, (*TransactionAuthenticator__Ed25519)(nil)) {
+		return BytesConcat(authenticator.(*TransactionAuthenticator__Ed25519).PublicKey, []byte{Ed25519Key})
+	} else if core.IsInstanceOf(authenticator, (*TransactionAuthenticator__MultiEd25519)(nil)) {
+		return BytesConcat(authenticator.(*TransactionAuthenticator__MultiEd25519).PublicKey, []byte{MultiEd25519Key})
+	}
+	return nil
+}
+
 func ToAccountAddress(addr string) (*AccountAddress, error) {
 	accountBytes, err := hex.DecodeString(strings.Replace(addr, "0x", "", 1))
 	if err != nil {
@@ -188,6 +238,13 @@ func Hash(prefix, data []byte) []byte {
 	concatData.Write(data)
 	hashData := sha3.Sum256(concatData.Bytes())
 	return hashData[:]
+}
+
+func BytesConcat(key []byte, i []byte) []byte {
+	data := bytes.Buffer{}
+	data.Write(key)
+	data.Write(i)
+	return data.Bytes()
 }
 
 func PrefixHash(name string) []byte {
