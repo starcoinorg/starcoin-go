@@ -18,6 +18,10 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+func SignRawUserTransaction(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUserTransaction) (*types.SignedUserTransaction, error) {
+	return signTxn(privateKey, rawUserTransaction)
+}
+
 func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUserTransaction) (*types.SignedUserTransaction, error) {
 	data := bytes.Buffer{}
 
@@ -62,7 +66,7 @@ func encode_u128_argument(arg serde.Uint128) []byte {
 		return s.GetBytes()
 	}
 
-	panic("Unable to serialize argument of type u64")
+	panic("Unable to serialize argument of type U128")
 }
 
 func decode_u128_argument(data []byte) (*serde.Uint128, error) {
@@ -152,7 +156,7 @@ func HexStringToBytes(hexString string) ([]byte, error) {
 	return hex.DecodeString(strings.Replace(hexString, "0x", "", 1))
 }
 
-func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte, error) {
+func GetRawUserTransactionHash(txn *types.RawUserTransaction) ([]byte, error) {
 	data, err := txn.BcsSerialize()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -161,7 +165,7 @@ func GetRawUserTransactionHash(txn types.RawUserTransaction) ([]byte, error) {
 	return types.Hash(types.PrefixHash("RawUserTransaction"), data), nil
 }
 
-func GetSignedUserTransactionHash(txn types.SignedUserTransaction) ([]byte, error) {
+func GetSignedUserTransactionHash(txn *types.SignedUserTransaction) ([]byte, error) {
 	data, err := txn.BcsSerialize()
 	if err != nil {
 		return nil, errors.WithStack(err)
