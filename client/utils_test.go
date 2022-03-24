@@ -54,7 +54,7 @@ func TestGetRawUserTransactionHash(t *testing.T) {
 		t.Error(err)
 	}
 
-	txnHashBytes, err := GetRawUserTransactionHash(txn)
+	txnHashBytes, err := GetRawUserTransactionHash(&txn)
 	if err != nil {
 		t.Error(err)
 	}
@@ -79,7 +79,7 @@ func TestGetSingedUserTransactionHash(t *testing.T) {
 		t.Error(err)
 	}
 
-	txnHashBytes, err := GetSignedUserTransactionHash(txn)
+	txnHashBytes, err := GetSignedUserTransactionHash(&txn)
 	if err != nil {
 		t.Error(err)
 	}
