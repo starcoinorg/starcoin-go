@@ -3,7 +3,7 @@ package consensus
 import (
 	"fmt"
 	"github.com/holiman/uint256"
-	"github.com/tvdburgt/go-argon2"
+	"github.com/matthewhartstonge/argon2"
 )
 
 type ArgonConsensus struct{}
@@ -34,13 +34,12 @@ func (ArgonConsensus) CalculatePowHash(headBlob []byte, nonce uint32, extra []by
 	if err != nil {
 		return nil, err
 	}
-	ctx := &argon2.Context{
-		Memory: 1024,
-	}
+	argon := argon2.DefaultConfig()
+	argon.MemoryCost = 1024
+	s, err := argon.Hash(headerBytes,headerBytes)
 
-	s, err := argon2.HashEncoded(ctx, headerBytes, headerBytes)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(s), nil
+	return s.Encode(), nil
 }
