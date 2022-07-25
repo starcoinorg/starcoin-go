@@ -38,6 +38,7 @@ func (ArgonConsensus) CalculatePowHash(headBlob []byte, nonce uint32, extra []by
 	argon.MemoryCost = 1024
 	argon.TimeCost = 3
 	argon.Parallelism = 1
+	argon.Mode = argon2.ModeArgon2i
 	s, err := argon.Hash(headerBytes,headerBytes)
 
 	if err != nil {
