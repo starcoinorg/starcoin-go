@@ -34,9 +34,9 @@ func (ArgonConsensus) CalculatePowHash(headBlob []byte, nonce uint32, extra []by
 	if err != nil {
 		return nil, err
 	}
-	ctx := &argon2.Context{
-		Memory: 1024,
-	}
+
+	ctx := argon2.NewContext()
+	ctx.Memory = 1024
 
 	s, err := argon2.HashEncoded(ctx, headerBytes, headerBytes)
 	if err != nil {
