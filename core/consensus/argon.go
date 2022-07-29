@@ -44,5 +44,5 @@ func (ArgonConsensus) CalculatePowHash(headBlob []byte, nonce uint32, extra []by
 	if err != nil {
 		return nil, err
 	}
-	return s.Encode(), nil
+	return s.Hash, nil
 }
