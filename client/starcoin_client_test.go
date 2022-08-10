@@ -250,7 +250,7 @@ func TestDryRunRaw(t *testing.T) {
 		Module:  types.Identifier("STC"),
 		Name:    types.Identifier("STC"),
 	}
-	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, *receiver, serde.Uint128{
+	payload := Encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, *receiver, serde.Uint128{
 		High: 0,
 		Low:  10000,
 	})
