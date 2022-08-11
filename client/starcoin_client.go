@@ -37,6 +37,7 @@ func (this *StarcoinClient) Call(context context.Context, serviceMethod string, 
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("call method %s err: ", serviceMethod))
 	}
+	defer client.Close()
 
 	err = client.Call(context, serviceMethod, reply, args)
 
