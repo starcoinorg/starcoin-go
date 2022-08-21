@@ -304,11 +304,31 @@ func (this *StarcoinClient) GetResource(context context.Context, address string,
 }
 
 func (this *StarcoinClient) GetAccountSequenceNumber(context context.Context, address string) (uint64, error) {
-	state, err := this.GetState(context, address)
+	//state, err := this.GetState(context, address)
+	restype := "0x00000000000000000000000000000001::Account::Account"
+	result := &RawResource{}
+	opt := GetResourceOption{
+		Decode: false,
+	}
+	r, err := this.GetResource(context, address, restype, opt, result)
+	if r == nil {
+		return 0, errors.New("get \"0x1::Account::Account\" resource return nil")
+	}
+	if err != nil {
+		return 0, errors.Wrap(err, "call method GetResource ")
+	}
 	if err != nil {
 		return 0, err
 	}
-	return state.SequenceNumber, nil
+	bs, err := HexStringToBytes(r.(*RawResource).Raw)
+	if err != nil {
+		return 0, err
+	}
+	accountResource, err := types.BcsDeserializeAccountResource(bs)
+	if err != nil {
+		return 0, errors.Wrap(err, "Bcs Deserialize AccountResource failed")
+	}
+	return accountResource.SequenceNumber, nil
 }
 
 func (this *StarcoinClient) GetState(context context.Context, address string) (*types.AccountResource, error) {
