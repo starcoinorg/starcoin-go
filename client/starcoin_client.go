@@ -499,7 +499,7 @@ func (this *StarcoinClient) TransferStc(context context.Context, sender types.Ac
 		Module:  types.Identifier("STC"),
 		Name:    types.Identifier("STC"),
 	}
-	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
+	payload := Encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
 
 	price, err := this.GetGasUnitPrice(context)
 	if err != nil {
@@ -535,7 +535,7 @@ func (this *StarcoinClient) BuildTransferStcTxn(context context.Context, sender 
 		Module:  types.Identifier("STC"),
 		Name:    types.Identifier("STC"),
 	}
-	payload := encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
+	payload := Encode_peer_to_peer_v2_script_function(&types.TypeTag__Struct{Value: coinType}, receiver, amount)
 
 	return this.BuildRawUserTransaction(context, sender, payload, price, gasLimit, seq)
 }

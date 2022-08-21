@@ -48,7 +48,7 @@ func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUs
 	}, nil
 }
 
-func encode_peer_to_peer_v2_script_function(currency types.TypeTag, payee types.AccountAddress, amount serde.Uint128) types.TransactionPayload {
+func Encode_peer_to_peer_v2_script_function(currency types.TypeTag, payee types.AccountAddress, amount serde.Uint128) types.TransactionPayload {
 	return &types.TransactionPayload__ScriptFunction{
 		types.ScriptFunction{
 			Module:   types.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
