@@ -315,6 +315,15 @@ func TestEstimateGas(t *testing.T) {
 	fmt.Println(result)
 }
 
+func TestGetAccountSequenceNumber(t *testing.T) {
+	client := NewStarcoinClient("https://barnard-seed.starcoin.org")
+	seqNumber, err := client.GetAccountSequenceNumber(context.Background(), "0x569ab535990a17ac9afd1bc57faec683")
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Printf("current account seqNumber: %d\n", seqNumber)
+}
+
 func TestGetEvents(t *testing.T) {
 	client := NewStarcoinClient("https://halley-seed.starcoin.org")
 	var to uint64 = 208141

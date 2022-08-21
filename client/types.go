@@ -601,6 +601,10 @@ type BlockInfo struct {
 	BlockAccumulatorInfo AccumulatorInfo `json:"block_accumulator_info"`
 }
 
+type RawResource struct {
+	Raw string `json:"raw"`
+}
+
 func (info NodeInfo) GetBlockNumber() (uint64, error) {
 	number, err := strconv.Atoi(info.PeerInfo.ChainInfo.Header.Height)
 	if err != nil {
