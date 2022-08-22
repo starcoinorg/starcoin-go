@@ -38,19 +38,19 @@ func signTxn(privateKey types.Ed25519PrivateKey, rawUserTransaction *types.RawUs
 
 	publicKey, _ := owcrypt.GenPubkey(privateKey, owcrypt.ECC_CURVE_ED25519_NORMAL)
 	transactionAuthenticator := types.TransactionAuthenticator__Ed25519{
-		types.Ed25519PublicKey(publicKey),
-		sign,
+		PublicKey: types.Ed25519PublicKey(publicKey),
+		Signature: sign,
 	}
 
 	return &types.SignedUserTransaction{
-		*rawUserTransaction,
-		&transactionAuthenticator,
+		RawTxn:        *rawUserTransaction,
+		Authenticator: &transactionAuthenticator,
 	}, nil
 }
 
 func Encode_peer_to_peer_v2_script_function(currency types.TypeTag, payee types.AccountAddress, amount serde.Uint128) types.TransactionPayload {
 	return &types.TransactionPayload__ScriptFunction{
-		types.ScriptFunction{
+		Value: types.ScriptFunction{
 			Module:   types.ModuleId{Address: [16]uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, Name: "TransferScripts"},
 			Function: "peer_to_peer_v2",
 			TyArgs:   []types.TypeTag{currency},
@@ -142,10 +142,7 @@ func PublicKeyToAddress(pk [32]byte) string {
 
 func Verify(pk []byte, message []byte, signature []byte) bool {
 	result := owcrypt.Verify(pk, nil, message, signature, owcrypt.ECC_CURVE_ED25519_NORMAL)
-	if result == owcrypt.SUCCESS {
-		return true
-	}
-	return false
+	return result == owcrypt.SUCCESS
 }
 
 func BytesToHexString(data []byte) string {

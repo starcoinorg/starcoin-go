@@ -1474,6 +1474,9 @@ func load_DataType__Resource(deserializer serde.Deserializer) (DataType__Resourc
 type Ed25519PrivateKey []byte
 
 func (obj *Ed25519PrivateKey) Serialize(serializer serde.Serializer) error {
+	if len(*obj) != 32 {
+		return fmt.Errorf("the private key length must be 32")
+	}
 	if err := serializer.IncreaseContainerDepth(); err != nil {
 		return err
 	}
