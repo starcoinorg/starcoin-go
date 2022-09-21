@@ -4,13 +4,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/starcoinorg/starcoin-go/types"
-
 	"github.com/novifinancial/serde-reflection/serde-generate/runtime/golang/serde"
+	"github.com/starcoinorg/starcoin-go/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPublicKeyToAddress(t *testing.T) {
@@ -31,13 +31,51 @@ func TestBigIntU128(t *testing.T) {
 	bdata := U128ToBigInt(data)
 
 	rebackData, err := BigIntToU128(bdata)
+	require.Nil(t, err)
+	require.Equal(t, data, rebackData, "bigInt & u128 restore failed")
+}
 
-	if err != nil {
-		t.Error(err)
+func TestBigIntToU128(t *testing.T) {
+	tests := []struct {
+		name    string
+		bigInt  *big.Int
+		wantErr bool
+	}{
+		{
+			name:    "negative number",
+			bigInt:  big.NewInt(-10000),
+			wantErr: true,
+		},
+		{
+			name:    "too large number",
+			bigInt:  big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil), // 2^128
+			wantErr: true,
+		},
+		{
+			name:   "less than U64 max",
+			bigInt: big.NewInt(0).Exp(big.NewInt(2), big.NewInt(60), nil),
+		},
+		{
+			name:   "greather than U64 max",
+			bigInt: big.NewInt(0).Exp(big.NewInt(2), big.NewInt(127), nil),
+		},
+		{
+			name:   "normal number",
+			bigInt: big.NewInt(1234567890987654321),
+		},
 	}
-
-	if rebackData.High != data.High && rebackData.Low != data.Low {
-		t.Error("should not be here")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := BigIntToU128(tt.bigInt)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BigIntToU128() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil {
+				restoreInt := U128ToBigInt(got)
+				require.Equal(t, tt.bigInt, restoreInt, "bigInt & u128 restore failed")
+			}
+		})
 	}
 }
 
