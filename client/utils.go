@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 	"strings"
@@ -85,32 +84,28 @@ func U128ToBigInt(value *serde.Uint128) *big.Int {
 	result.SetUint64(value.High)
 	result.Lsh(result, 64)
 
-	lowValue := &big.Int{}
+	lowValue := big.NewInt(0)
 	lowValue.SetUint64(value.Low)
 
 	return result.Add(result, lowValue)
 }
 
 func BigIntToU128(value *big.Int) (*serde.Uint128, error) {
-	valueBytes := value.Bytes()
-
-	highBytes := bytes.NewReader(valueBytes[:len(valueBytes)-8])
-	lowBytes := bytes.NewReader(valueBytes[len(valueBytes)-8:])
-
-	highValue, err := binary.ReadUvarint(highBytes)
-	if err != nil {
-		errors.WithStack(err)
+	n := big.NewInt(0).Set(value)
+	if n.Sign() < 0 {
+		return nil, errors.New("Invalid U128: negative number")
 	}
-
-	lowValue, err := binary.ReadUvarint(lowBytes)
-	if err != nil {
-		errors.WithStack(err)
+	bitLen := n.BitLen()
+	if bitLen > 128 {
+		return nil, errors.New("Invalid U128: too large number")
 	}
-
-	return &serde.Uint128{
-		High: highValue,
-		Low:  lowValue,
-	}, nil
+	res := &serde.Uint128{}
+	res.Low = n.Uint64()
+	if bitLen > 64 {
+		n = n.Rsh(n, 64)
+		res.High = n.Uint64()
+	}
+	return res, nil
 }
 
 func encode_address_argument(arg types.AccountAddress) []byte {
